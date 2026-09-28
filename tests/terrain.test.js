@@ -1,12 +1,13 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { installCanvasMock } from './helpers/canvas.js';
+import { loadLeaflet } from './helpers/leaflet.js';
 
 let T;
 let N;
 let SEED;
 beforeAll(async () => {
   installCanvasMock();
-  await import('../vendor/leaflet/leaflet.js');
+  loadLeaflet();
   await import('../js/noise.js');
   await import('../js/terrain.js');
   T = window.Terrain;
@@ -31,7 +32,7 @@ function blockPixel(dimension, x, z) {
   const buf = ctx.log.find((op) => op[0] === 'drawImage')[1];
   const img = buf.getContext('2d').image;
   expect(img.width).toBe(1);
-  return [...img.data.slice(0, 3)];
+  return Array.from(img.data.slice(0, 3));
 }
 
 describe('TerrainLayer', () => {
@@ -86,9 +87,9 @@ describe('TerrainLayer', () => {
     const tile = new T.TerrainLayer({ dimension: 'nether' }).createTile({ x: -1, y: -1, z: -3 });
     const img = tile.getContext('2d').log[1][1].getContext('2d').image;
     // Premier échantillon : bloc (-2048, -2048) ; dernier : (-16, -16).
-    expect([...img.data.slice(0, 3)]).toEqual(shaded(COLORS.nether, -2048, -2048));
+    expect(Array.from(img.data.slice(0, 3))).toEqual(shaded(COLORS.nether, -2048, -2048));
     const last = (128 * 128 - 1) * 4;
-    expect([...img.data.slice(last, last + 3)]).toEqual(shaded(COLORS.nether, -16, -16));
+    expect(Array.from(img.data.slice(last, last + 3))).toEqual(shaded(COLORS.nether, -16, -16));
     expect(img.data[last + 3]).toBe(255);
   });
 

@@ -485,10 +485,9 @@
     L.popup({ minWidth: 220 }).setLatLng(latlng).setContent(content).openOn(map);
   }
 
+  // Appelé depuis la liste, qui ne montre que les chemins de la dimension affichée.
   function focusPath(id) {
     const path = store.getPath(id);
-    if (!path) return;
-    if (path.dim !== state.dim) setDimension(path.dim);
     const bounds = L.latLngBounds(path.points.map(([x, z]) => toLatLng(x, z)));
     map.fitBounds(bounds.pad(0.2), { maxZoom: 2, animate: false });
     const mid = path.points[Math.floor(path.points.length / 2)];
@@ -783,13 +782,10 @@
 
   // --- URL (#dimension/x/z/zoom) --------------------------------------------------------
 
-  let hashLock = false;
+  // replaceState ne déclenche pas hashchange : pas de boucle avec l'écouteur ci-dessous.
   function updateHash() {
-    if (!state.dim) return;
     const { x, z } = fromLatLng(map.getCenter());
-    hashLock = true;
     history.replaceState(null, '', `#${state.dim}/${x}/${z}/${map.getZoom()}`);
-    hashLock = false;
   }
 
   function parseHash() {
@@ -799,7 +795,6 @@
   }
 
   window.addEventListener('hashchange', () => {
-    if (hashLock) return;
     const v = parseHash();
     if (v) setDimension(v.dim, v);
   });
@@ -812,11 +807,12 @@
 
   $('#goto').addEventListener('submit', (e) => {
     e.preventDefault();
+    // Champs type="number" (x et z requis) : le navigateur n'y laisse qu'un
+    // nombre fini ou une chaîne vide.
     const f = e.target.elements;
     const x = Math.round(Number(f.x.value));
     const z = Math.round(Number(f.z.value));
-    const y = f.y.value.trim() === '' ? null : Math.round(Number(f.y.value));
-    if (!Number.isFinite(x) || !Number.isFinite(z) || (y !== null && !Number.isFinite(y))) return;
+    const y = f.y.value === '' ? null : Math.round(Number(f.y.value));
     map.setView(toLatLng(x, z), Math.max(map.getZoom(), 1));
     openLocationPopup(x, z, y);
   });
@@ -1161,7 +1157,7 @@
         visible: existing ? existing.visible : true,
       }, image));
       $('#bg-dialog').close();
-      if (!existing && bg) focusBackground(bg);
+      if (!existing) focusBackground(bg);
     } catch (err) {
       alert(`Impossible d'enregistrer le fond : ${err.message || err}`);
     }
@@ -1181,8 +1177,8 @@
     getBlob: (hash) => Backgrounds.getBlob(hash).catch(() => null),
   });
 
+  // Appelé par CloudSync, qui ne démarre que si la synchronisation est configurée.
   function renderSync(status) {
-    if (!cloud.enabled) return;
     const on = !!cloud.code;
     $('#sync-section').hidden = false;
     $('#sync-off').hidden = on;

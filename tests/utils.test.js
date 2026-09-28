@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeAll } from 'vitest';
+import { loadLeaflet } from './helpers/leaflet.js';
 
 beforeAll(async () => {
-  await import('../vendor/leaflet/leaflet.js');
+  loadLeaflet();
   await import('../js/utils.js');
 });
 
