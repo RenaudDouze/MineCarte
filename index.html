@@ -18,6 +18,7 @@
     </nav>
     <form id="goto" class="goto" autocomplete="off">
       <label>X <input name="x" type="number" step="1" required></label>
+      <label>Y <input name="y" type="number" step="1" placeholder="opt." title="Optionnel : repris dans le POI créé"></label>
       <label>Z <input name="z" type="number" step="1" required></label>
       <button type="submit">Aller</button>
     </form>
@@ -73,6 +74,7 @@
         <ul class="help">
           <li><b>Clic droit</b> sur la carte : ajouter un POI, démarrer un chemin, copier les coordonnées.</li>
           <li><b>Clic</b> sur un POI : détails, liens et actions.</li>
+          <li><b>Aller à</b> (X, Y optionnel, Z) : depuis l'emplacement trouvé, créer un POI, commencer un chemin, ajouter le point au bout d'un chemin ou au tracé en cours.</li>
           <li>Tracé : clic pour ajouter un point, clic sur un POI pour s'y accrocher, <b>double-clic</b> ou <b>Entrée</b> pour terminer, <b>Retour arrière</b> pour annuler le dernier point, <b>Échap</b> pour abandonner.</li>
           <li>Édition d'un tracé : glissez les sommets, clic sur un segment pour insérer un point, clic droit sur un sommet pour le supprimer.</li>
         </ul>

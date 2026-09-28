@@ -799,15 +799,71 @@
 
   $('#goto').addEventListener('submit', (e) => {
     e.preventDefault();
-    const x = Math.round(Number(e.target.elements.x.value));
-    const z = Math.round(Number(e.target.elements.z.value));
-    if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+    const f = e.target.elements;
+    const x = Math.round(Number(f.x.value));
+    const z = Math.round(Number(f.z.value));
+    const y = f.y.value.trim() === '' ? null : Math.round(Number(f.y.value));
+    if (!Number.isFinite(x) || !Number.isFinite(z) || (y !== null && !Number.isFinite(y))) return;
     map.setView(toLatLng(x, z), Math.max(map.getZoom(), 1));
-    L.popup({ closeButton: false, autoClose: true })
-      .setLatLng(toLatLng(x, z))
-      .setContent(`X ${x} · Z ${z}`)
-      .openOn(map);
+    openLocationPopup(x, z, y);
   });
+
+  // Emplacement recherché : repère temporaire + actions (POI, chemin).
+  const searchLayer = L.layerGroup().addTo(map);
+
+  function openLocationPopup(x, z, y) {
+    const latlng = toLatLng(x, z);
+    const conv = convert(state.dim, x, z);
+    const btn = (label, fn, cls) => h('button', { type: 'button', class: cls, onclick: fn }, label);
+    const paths = store.data.paths.filter((p) => p.dim === state.dim);
+
+    let actions;
+    if (state.mode === 'draw') {
+      actions = [btn('➕ Ajouter au tracé en cours', () => {
+        map.closePopup();
+        addDrawPoint(x, z);
+      }, 'primary')];
+    } else if (!state.mode) {
+      actions = [
+        btn('📍 Créer un POI', () => {
+          map.closePopup();
+          openPoiDialog(y === null ? { x, z } : { x, y, z });
+        }, 'primary'),
+        btn('〰 Commencer un chemin', () => startDrawing({ start: { x, z } })),
+      ];
+    }
+
+    const content = h('div', { class: 'location-popup' },
+      h('div', { class: 'popup-title' }, '📌 ', `X ${x}${y === null ? '' : ` · Y ${y}`} · Z ${z}`),
+      conv ? h('div', { class: 'popup-sub' }, `≈ ${DIM_LABELS[conv.dim]} : X ${conv.x}, Z ${conv.z}`) : null,
+      actions ? h('div', { class: 'popup-actions' }, actions) : null,
+      !state.mode && paths.length ? h('select', {
+        class: 'append-path',
+        onchange: (e) => appendToPath(e.target.value, x, z),
+      },
+      h('option', { value: '' }, 'Ajouter au bout d’un chemin…'),
+      paths.map((p) => h('option', { value: p.id }, p.name))) : null,
+      h('div', { class: 'popup-actions' },
+        btn('📋 Copier', () => copy(y === null ? `${x} ~ ${z}` : `${x} ${y} ${z}`))));
+
+    // Le repère est ajouté après l'ouverture : fermer l'ancienne popup vide le calque.
+    L.popup({ minWidth: 230, offset: [0, -4] })
+      .setLatLng(latlng)
+      .setContent(content)
+      .on('remove', () => searchLayer.clearLayers())
+      .openOn(map);
+    L.circleMarker(latlng, {
+      radius: 7, color: '#fff', weight: 2, fillColor: '#000', fillOpacity: 0.4, interactive: false,
+    }).addTo(searchLayer);
+  }
+
+  function appendToPath(id, x, z) {
+    const path = store.getPath(id);
+    if (!path) return;
+    map.closePopup();
+    store.savePath(Object.assign({}, path, { points: [...path.points, [x, z]] }));
+    toast(`Point ajouté à « ${path.name} ».`);
+  }
 
   function setSidebar(open) {
     document.body.classList.toggle('sidebar-hidden', !open);
