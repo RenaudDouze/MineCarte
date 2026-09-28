@@ -174,12 +174,23 @@
   // --- Rendu des POI, liens et chemins ---------------------------------------------
 
   function poiIcon(poi) {
+    const src = poi.icon && Icons.url(poi.icon);
+    const pin = src
+      ? `<span class="poi-pin poi-pin-item" style="border-color:${poi.color}"><img src="${src}" alt=""></span>`
+      : `<span class="poi-pin" style="background:${poi.color}"></span>`;
     return L.divIcon({
       className: 'poi-icon',
       iconSize: null,
-      html: `<span class="poi-pin" style="background:${poi.color}"></span>` +
-        `<span class="poi-label">${esc(poi.name)}</span>`,
+      html: `${pin}<span class="poi-label">${esc(poi.name)}</span>`,
     });
+  }
+
+  // Pastille d'un POI dans les listes et popups : son icône d'item, sinon sa couleur.
+  function poiDot(poi) {
+    const src = poi.icon && Icons.url(poi.icon);
+    return src
+      ? h('span', { class: 'dot dot-item', style: `border-color:${poi.color}` }, h('img', { src, alt: '' }))
+      : h('span', { class: 'dot', style: `background:${poi.color}` });
   }
 
   function render() {
@@ -224,9 +235,9 @@
       if (path.dim !== state.dim) continue;
       if ((state.draw && state.draw.pathId === path.id) || (state.edit && state.edit.pathId === path.id)) continue;
       const latlngs = path.points.map(([x, z]) => toLatLng(x, z));
-      L.polyline(latlngs, { pane: 'pathPane', color: '#000', weight: 7, opacity: 0.35, interactive: false })
+      L.polyline(latlngs, { pane: 'pathPane', color: '#000', weight: path.weight + 3, opacity: 0.35, interactive: false })
         .addTo(pathLayer);
-      const line = L.polyline(latlngs, { pane: 'pathPane', color: path.color, weight: 4, opacity: 0.95 });
+      const line = L.polyline(latlngs, { pane: 'pathPane', color: path.color, weight: path.weight, opacity: 0.95 });
       line.on('click', (e) => {
         if (state.mode) return;
         openPathPopup(path, e.latlng);
@@ -251,7 +262,7 @@
 
     const poiList = $('#poi-list');
     poiList.replaceChildren(...pois.map((poi) => h('li', { class: 'item', onclick: () => focusPoi(poi.id) },
-      h('span', { class: 'dot', style: `background:${poi.color}` }),
+      poiDot(poi),
       h('span', { class: 'item-main' },
         h('span', { class: 'item-name' }, poi.name),
         h('span', { class: 'item-sub' }, `X ${poi.x} · Y ${poi.y} · Z ${poi.z}`)),
@@ -281,7 +292,7 @@
 
     const content = h('div', { class: 'poi-popup' },
       h('div', { class: 'popup-title' },
-        h('span', { class: 'dot', style: `background:${poi.color}` }), poi.name),
+        poiDot(poi), poi.name),
       h('div', { class: 'popup-coords' },
         h('span', {}, `X ${poi.x}`), h('span', { class: 'y', title: 'Hauteur (information)' }, `Y ${poi.y}`), h('span', {}, `Z ${poi.z}`)),
       conv ? h('div', { class: 'popup-sub' }, `≈ ${DIM_LABELS[conv.dim]} : X ${conv.x}, Z ${conv.z}`) : null,
@@ -293,7 +304,7 @@
           title: `Aller à ${other.name}`,
           onclick: () => focusPoi(other.id),
         },
-        h('span', { class: 'dot', style: `background:${other.color}` }),
+        poiDot(other),
         h('span', { class: 'link-name' }, other.name),
         other.dim !== poi.dim ? dimBadge(other.dim) : null,
         h('span', { class: 'arrow' }, '➜')))) : null,
@@ -305,6 +316,7 @@
           onclick: () => openPoiDialog({
             name: `${poi.name} (${DIM_LABELS[conv.dim]})`,
             color: poi.color,
+            icon: poi.icon,
             dim: conv.dim,
             x: conv.x,
             y: poi.y,
@@ -391,7 +403,7 @@
           checked: selected.has(p.id),
           onchange: (e) => (e.target.checked ? selected.add(p.id) : selected.delete(p.id)),
         }),
-        h('span', { class: 'dot', style: `background:${p.color}` }),
+        poiDot(p),
         h('span', { class: 'link-name' }, p.name),
         h('span', { class: 'item-sub' }, `${p.x}, ${p.z}`),
         dimBadge(p.dim))));
@@ -402,7 +414,7 @@
   function openPoiDialog(poi) {
     const form = $('#poi-form');
     const center = fromLatLng(map.getCenter());
-    const data = Object.assign({ name: '', color: '#e53935', dim: state.dim, x: center.x, y: 64, z: center.z, links: [] }, poi);
+    const data = Object.assign({ name: '', color: '#e53935', icon: '', dim: state.dim, x: center.x, y: 64, z: center.z, links: [] }, poi);
     $('#poi-dialog-title').textContent = data.id ? 'Modifier le POI' : 'Nouveau POI';
     form.elements.id.value = data.id || '';
     form.elements.name.value = data.name;
@@ -411,6 +423,8 @@
     form.elements.x.value = data.x;
     form.elements.y.value = data.y;
     form.elements.z.value = data.z;
+    setPoiIcon(data.icon);
+    $('#icon-picker').hidden = true;
     $('#poi-link-filter').value = '';
     poiDialogLinks = new Set(data.links);
     renderLinkPicker(poiDialogLinks, data.id);
@@ -423,6 +437,61 @@
     renderLinkPicker(poiDialogLinks, $('#poi-form').elements.id.value);
   });
 
+  // --- Choix de l'icône d'item -------------------------------------------------
+
+  function setPoiIcon(id) {
+    $('#poi-form').elements.icon.value = id || '';
+    const preview = $('#icon-current');
+    const src = id && Icons.url(id);
+    preview.replaceChildren(
+      src ? h('img', { src, alt: '' }) : h('span', { class: 'icon-none' }, '—'),
+      h('span', {}, id ? Icons.name(id) : 'Aucune (pastille de couleur)'));
+    $('#icon-clear').hidden = !id;
+  }
+
+  function renderIconGrid() {
+    const grid = $('#icon-grid');
+    const results = Icons.search($('#icon-search').value, 160);
+    const current = $('#poi-form').elements.icon.value;
+    grid.replaceChildren(...results.map((item) => h('button', {
+      type: 'button',
+      class: `icon-cell${item.id === current ? ' selected' : ''}`,
+      title: `${item.readable} (${item.id})`,
+      onclick: () => {
+        setPoiIcon(item.id);
+        $('#icon-picker').hidden = true;
+      },
+    }, h('img', { src: Icons.url(item.id), alt: item.readable, loading: 'lazy' }))));
+    if (!results.length) grid.append(h('p', { class: 'hint' }, 'Aucun item trouvé (recherche en anglais : diamond, totem, bed…).'));
+  }
+
+  $('#icon-choose').addEventListener('click', () => {
+    const picker = $('#icon-picker');
+    picker.hidden = !picker.hidden;
+    if (picker.hidden) return;
+    $('#icon-search').focus();
+    if (Icons.isLoaded()) {
+      renderIconGrid();
+      return;
+    }
+    $('#icon-grid').replaceChildren(h('p', { class: 'hint' }, 'Chargement des icônes…'));
+    Icons.load().then(renderIconGrid, () => {
+      $('#icon-grid').replaceChildren(h('p', { class: 'hint' }, 'Impossible de charger les icônes (connexion internet requise).'));
+    });
+  });
+  $('#icon-search').addEventListener('input', () => { if (Icons.isLoaded()) renderIconGrid(); });
+  $('#icon-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+  $('#icon-clear').addEventListener('click', () => setPoiIcon(''));
+
+  function updateWeightPreview() {
+    const f = $('#path-form').elements;
+    $('#weight-value').textContent = `${f.weight.value} px`;
+    $('#weight-preview').style.cssText = `height:${f.weight.value}px;background:${f.color.value}`;
+  }
+  $('#path-form').elements.weight.addEventListener('input', updateWeightPreview);
+  $('#path-form').elements.color.addEventListener('input', updateWeightPreview);
+  $('#path-form').querySelector('.swatches').addEventListener('click', () => setTimeout(updateWeightPreview));
+
   $('#poi-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target.elements;
@@ -434,6 +503,7 @@
       x: f.x.value,
       y: f.y.value,
       z: f.z.value,
+      icon: f.icon.value,
       links: [...poiDialogLinks],
     });
     $('#poi-dialog').close();
@@ -482,6 +552,8 @@
     form.elements.id.value = path.id;
     form.elements.name.value = path.name;
     form.elements.color.value = path.color;
+    form.elements.weight.value = path.weight;
+    updateWeightPreview();
     $('#path-info').textContent = `${DIM_LABELS[path.dim]} · ${fmt(pathLength(path.points))} blocs · ${path.points.length} points`;
     $('#path-dialog').showModal();
     form.elements.name.focus();
@@ -492,7 +564,7 @@
     e.preventDefault();
     const f = e.target.elements;
     const path = store.getPath(f.id.value);
-    if (path) store.savePath(Object.assign({}, path, { name: f.name.value, color: f.color.value }));
+    if (path) store.savePath(Object.assign({}, path, { name: f.name.value, color: f.color.value, weight: f.weight.value }));
     $('#path-dialog').close();
   });
 
@@ -511,12 +583,13 @@
     map.closePopup();
     const existing = pathId && store.getPath(pathId);
     const color = existing ? existing.color : nextPathColor();
+    const weight = existing ? existing.weight : 4;
     state.mode = 'draw';
     state.draw = {
       pathId: existing ? existing.id : null,
       points: existing ? existing.points.map((p) => p.slice()) : [],
       color,
-      line: L.polyline([], { pane: 'pathPane', color, weight: 4, interactive: false }).addTo(drawLayer),
+      line: L.polyline([], { pane: 'pathPane', color, weight, interactive: false }).addTo(drawLayer),
       preview: L.polyline([], { pane: 'pathPane', color, weight: 2, dashArray: '6 6', interactive: false }).addTo(drawLayer),
       vertices: L.layerGroup().addTo(drawLayer),
     };
@@ -587,7 +660,7 @@
       pathId,
       name: path.name,
       points: path.points.map((p) => p.slice()),
-      line: L.polyline([], { pane: 'pathPane', color: path.color, weight: 6 }).addTo(drawLayer),
+      line: L.polyline([], { pane: 'pathPane', color: path.color, weight: Math.max(path.weight + 2, 6) }).addTo(drawLayer),
       vertices: L.layerGroup().addTo(drawLayer),
     };
     state.edit.line.on('click', (e) => {
@@ -955,6 +1028,12 @@
   // --- Démarrage ------------------------------------------------------------------------------
 
   store.onChange(() => render());
+  // Les icônes d'items ne sont chargées que si un POI en utilise une.
+  function loadIconsIfNeeded() {
+    if (!Icons.isLoaded() && store.data.pois.some((p) => p.icon)) Icons.load().then(render, () => {});
+  }
+  store.onChange(loadIconsIfNeeded);
+  loadIconsIfNeeded();
   window.MineCarte = { map, store, state };
   fillSwatches();
   if (window.innerWidth < 720) document.body.classList.add('sidebar-hidden');

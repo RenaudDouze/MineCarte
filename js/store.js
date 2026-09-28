@@ -21,6 +21,14 @@
     return /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
   }
 
+  function icon(value) {
+    return typeof value === 'string' && /^minecraft:[a-z0-9_]+$/.test(value) ? value : '';
+  }
+
+  function weight(value) {
+    return Math.min(16, Math.max(1, int(value, 4)));
+  }
+
   function dimension(value) {
     return DIMENSIONS.includes(value) ? value : 'overworld';
   }
@@ -48,6 +56,7 @@
         x: int(p.x, 0),
         y: int(p.y, 64),
         z: int(p.z, 0),
+        icon: icon(p.icon),
         links: Array.isArray(p.links) ? p.links.filter((l) => typeof l === 'string') : [],
       });
     }
@@ -73,6 +82,7 @@
         name: String(path.name || 'Chemin').slice(0, 100),
         color: color(path.color, '#ffeb3b'),
         dim: dimension(path.dim),
+        weight: weight(path.weight),
         points,
       });
     }
@@ -126,6 +136,7 @@
       poi.x = int(input.x, 0);
       poi.y = int(input.y, 64);
       poi.z = int(input.z, 0);
+      poi.icon = icon(input.icon);
 
       const wanted = new Set((input.links || []).filter((l) => l !== poi.id && this.getPoi(l)));
       for (const other of this.data.pois) {
@@ -160,6 +171,7 @@
       path.name = String(input.name || 'Chemin').trim().slice(0, 100) || 'Chemin';
       path.color = color(input.color, '#ffeb3b');
       path.dim = dimension(input.dim);
+      path.weight = weight(input.weight);
       if (input.points) path.points = input.points.map((pt) => [int(pt[0], 0), int(pt[1], 0)]);
       this.save();
       return path;

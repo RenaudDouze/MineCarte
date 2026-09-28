@@ -27,13 +27,17 @@ python3 -m http.server 8000
 - **POI** : ajout (bouton « + POI » ou clic droit sur la carte), modification et suppression.
   Chaque POI a un nom, une couleur, une dimension et des coordonnées X, Y, Z. Seuls X et Z
   servent au placement, Y est affiché pour information.
+- **Icônes d'items** : un POI peut afficher l'icône d'un item Minecraft (recherche en anglais
+  parmi ~1 650 items). Les textures, propriété de Mojang, ne sont pas incluses dans le dépôt :
+  elles sont chargées depuis le paquet npm [`minecraft-textures`](https://github.com/destruc7i0n/minecraft-textures)
+  via jsDelivr (connexion internet requise).
 - **Liens entre POI** : un POI peut être lié à un ou plusieurs autres POI, y compris dans une
   autre dimension. Dans la popup d'un POI, cliquer sur un lien centre la carte sur le POI lié
   (et change de dimension si besoin). Les POI liés d'une même dimension sont reliés par un
   trait pointillé. Le bouton « Portail Nether / Overworld » crée un POI lié dans l'autre
   dimension aux coordonnées converties (÷8 ou ×8).
-- **Chemins** : tracé de polylignes avec un nom et une couleur, et affichage de leur longueur
-  en blocs.
+- **Chemins** : tracé de polylignes avec un nom, une couleur et une épaisseur (1 à 16 px), et
+  affichage de leur longueur en blocs.
   - Tracé : clic pour ajouter un point, clic sur un POI pour s'y accrocher, double-clic ou
     `Entrée` pour terminer, `Retour arrière` pour annuler le dernier point, `Échap` pour abandonner.
   - Édition : glisser un sommet pour le déplacer, clic sur un segment pour insérer un point,
@@ -52,6 +56,7 @@ python3 -m http.server 8000
 | `css/style.css` | Styles |
 | `js/noise.js` | Bruit de valeur seedé (fBm) |
 | `js/terrain.js` | Génération des fonds des dimensions et de la grille (`L.GridLayer`) |
+| `js/icons.js` | Chargement et recherche des icônes d'items |
 | `js/store.js` | Modèle de données (POI, liens, chemins), persistance, import / export |
 | `js/app.js` | Carte, rendu, interactions |
 
@@ -66,10 +71,10 @@ Coordonnées : la carte utilise `L.CRS.Simple`, avec 1 pixel = 1 bloc au zoom 0,
   "seed": "minecarte",
   "pois": [
     { "id": "…", "name": "Base", "color": "#e53935", "dim": "overworld",
-      "x": 120, "y": 64, "z": -340, "links": ["…"] }
+      "x": 120, "y": 64, "z": -340, "icon": "minecraft:diamond_sword", "links": ["…"] }
   ],
   "paths": [
-    { "id": "…", "name": "Route", "color": "#ffeb3b", "dim": "nether",
+    { "id": "…", "name": "Route", "color": "#ffeb3b", "dim": "nether", "weight": 4,
       "points": [[15, -42], [80, -42]] }
   ]
 }
