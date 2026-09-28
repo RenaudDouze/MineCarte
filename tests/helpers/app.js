@@ -9,7 +9,10 @@ import { installCanvasMock } from './canvas.js';
 import { loadLeaflet } from './leaflet.js';
 
 const html = readFileSync(join(import.meta.dirname, '../../index.html'), 'utf8');
-const body = html.slice(html.indexOf('<body>') + 6, html.indexOf('</body>')).replace(/<script[\s\S]*?<\/script>/g, '');
+// Corps de la page sans ses balises <script> (les scripts sont chargés un à un ci-dessous).
+const page = new DOMParser().parseFromString(html, 'text/html');
+page.querySelectorAll('script').forEach((el) => el.remove());
+const body = page.body.innerHTML;
 const MODULES = ['utils', 'noise', 'terrain', 'config', 'icons', 'backgrounds', 'store', 'sync'];
 
 let cleanups = [];
