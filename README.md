@@ -38,7 +38,10 @@ python3 -m http.server 8000
     `Entrée` pour terminer, `Retour arrière` pour annuler le dernier point, `Échap` pour abandonner.
   - Édition : glisser un sommet pour le déplacer, clic sur un segment pour insérer un point,
     clic droit sur un sommet pour le supprimer. « Prolonger » ajoute des points à la fin.
-- **Aller à** des coordonnées X / Z, et **URL partageable** (`#dimension/x/z/zoom`).
+- **Aller à** des coordonnées X / Z (Y optionnel) : depuis l'emplacement trouvé, créer un POI
+  (coordonnées pré-remplies), commencer un chemin, ajouter le point au bout d'un chemin existant
+  ou au tracé en cours.
+- **URL partageable** (`#dimension/x/z/zoom`).
 - **Sauvegarde** automatique dans le navigateur (localStorage), **export et import JSON**.
 
 ## Structure
