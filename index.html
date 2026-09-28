@@ -16,10 +16,10 @@
       <button type="button" data-dim="nether" class="dim-btn dim-nether">Nether</button>
       <button type="button" data-dim="end" class="dim-btn dim-end">End</button>
     </nav>
-    <form id="goto" class="goto" autocomplete="off">
-      <label>X <input name="x" type="number" step="1" required></label>
-      <label>Y <input name="y" type="number" step="1" placeholder="opt." title="Optionnel : repris dans le POI créé"></label>
-      <label>Z <input name="z" type="number" step="1" required></label>
+    <form id="goto" class="goto" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
+      <label>X <input name="x" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+      <label>Y <input name="y" type="number" step="1" placeholder="opt." title="Optionnel : repris dans le POI créé" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+      <label>Z <input name="z" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       <button type="submit">Aller</button>
     </form>
   </header>
@@ -34,7 +34,7 @@
 
       <section class="panel active" data-panel="pois">
         <div class="row">
-          <input id="poi-search" type="search" placeholder="Rechercher…">
+          <input id="poi-search" type="search" placeholder="Rechercher…" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
           <button type="button" id="add-poi" class="primary">+ POI</button>
         </div>
         <label class="check"><input type="checkbox" id="poi-all-dims"> Toutes les dimensions</label>
@@ -56,8 +56,8 @@
         <label class="check"><input type="checkbox" id="opt-links" checked> Traits entre POI liés</label>
 
         <h3>Génération</h3>
-        <form id="seed-form" class="row">
-          <input id="seed" type="text" placeholder="Graine">
+        <form id="seed-form" class="row" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
+          <input id="seed" type="text" placeholder="Graine" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
           <button type="submit">Appliquer</button>
         </form>
         <p class="hint">Le fond est décoratif : il est généré à partir de la graine mais ne reproduit pas le vrai monde Minecraft.</p>
@@ -98,10 +98,10 @@
   <div id="context-menu" class="context-menu" hidden></div>
 
   <dialog id="poi-dialog">
-    <form id="poi-form" method="dialog">
+    <form id="poi-form" method="dialog" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
       <h2 id="poi-dialog-title">Nouveau POI</h2>
       <input type="hidden" name="id">
-      <label>Nom <input name="name" type="text" maxlength="100" required></label>
+      <label>Nom <input name="label" type="text" maxlength="100" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       <div class="field">
         <span>Couleur</span>
         <div class="color-row">
@@ -118,7 +118,7 @@
           <button type="button" id="icon-clear">Retirer</button>
         </div>
         <div id="icon-picker" class="icon-picker" hidden>
-          <input id="icon-search" type="search" placeholder="Rechercher un item (en anglais : diamond, totem, bed…)">
+          <input id="icon-search" type="search" placeholder="Rechercher un item (en anglais : diamond, totem, bed…)" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
           <div id="icon-grid" class="icon-grid"></div>
         </div>
       </div>
@@ -130,13 +130,13 @@
         </select>
       </label>
       <div class="xyz">
-        <label>X <input name="x" type="number" step="1" required></label>
-        <label>Y <input name="y" type="number" step="1" required></label>
-        <label>Z <input name="z" type="number" step="1" required></label>
+        <label>X <input name="x" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+        <label>Y <input name="y" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+        <label>Z <input name="z" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       </div>
       <div class="field">
         <span>Liens vers d'autres POI</span>
-        <input id="poi-link-filter" type="search" placeholder="Filtrer…">
+        <input id="poi-link-filter" type="search" placeholder="Filtrer…" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
         <div id="poi-links" class="link-picker"></div>
       </div>
       <div class="dialog-actions">
@@ -147,10 +147,10 @@
   </dialog>
 
   <dialog id="path-dialog">
-    <form id="path-form" method="dialog">
+    <form id="path-form" method="dialog" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
       <h2>Chemin</h2>
       <input type="hidden" name="id">
-      <label>Nom <input name="name" type="text" maxlength="100" required></label>
+      <label>Nom <input name="label" type="text" maxlength="100" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       <div class="field">
         <span>Couleur</span>
         <div class="color-row">
