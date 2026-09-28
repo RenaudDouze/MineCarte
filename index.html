@@ -80,6 +80,11 @@
           <p class="hint">Les modifications sont synchronisées automatiquement. Toute personne qui connaît le code peut voir et modifier les données : ne le partage qu'avec qui tu veux.</p>
         </section>
 
+        <h3>Fonds de carte (uNmINeD)</h3>
+        <p class="hint">Affiche sous tes POI une image de ton vrai monde exportée depuis uNmINeD. Les images restent sur cet appareil (non synchronisées).</p>
+        <ul id="bg-list" class="list"></ul>
+        <div class="row"><button type="button" id="bg-add" class="grow">Importer une image…</button></div>
+
         <h3>Données</h3>
         <div class="row wrap">
           <button type="button" id="export">Exporter (JSON)</button>
@@ -164,6 +169,47 @@
     </form>
   </dialog>
 
+  <dialog id="bg-dialog">
+    <form id="bg-form" method="dialog" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
+      <h2 id="bg-dialog-title">Importer un fond de carte</h2>
+      <input type="hidden" name="id">
+      <label>Image (PNG, JPEG, WebP) <input name="file" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <label>Nom <input name="label" type="text" maxlength="100" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+      <label>Dimension
+        <select name="dim">
+          <option value="overworld">Overworld</option>
+          <option value="nether">Nether</option>
+          <option value="end">End</option>
+        </select>
+      </label>
+      <div class="field">
+        <span>Coin nord-ouest (en haut à gauche) de l'image</span>
+        <div class="xyz xz">
+          <label>X <input name="x" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+          <label>Z <input name="z" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+        </div>
+        <button type="button" id="bg-center">Placer au centre de la vue</button>
+      </div>
+      <label>Échelle de l'export
+        <select name="scale">
+          <option value="0.25">4 pixels par bloc</option>
+          <option value="0.5">2 pixels par bloc</option>
+          <option value="1">1 pixel par bloc (1:1)</option>
+          <option value="2">1 pixel = 2 blocs</option>
+          <option value="4">1 pixel = 4 blocs</option>
+          <option value="8">1 pixel = 8 blocs</option>
+        </select>
+      </label>
+      <label>Opacité <input name="opacity" type="range" min="10" max="100" step="5" value="100"></label>
+      <p id="bg-info" class="hint"></p>
+      <p class="hint">Dans uNmINeD, exporte la zone en image et relève les coordonnées du bloc en haut à gauche ainsi que l'échelle choisie. Tu pourras ajuster la position ensuite avec « Modifier », en t'aidant de la grille et de tes POI.</p>
+      <div class="dialog-actions">
+        <button type="button" data-close>Annuler</button>
+        <button type="submit" class="primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="path-dialog">
     <form id="path-form" method="dialog" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
       <h2>Chemin</h2>
@@ -196,6 +242,7 @@
   <script src="js/terrain.js"></script>
   <script src="js/config.js"></script>
   <script src="js/icons.js"></script>
+  <script src="js/backgrounds.js"></script>
   <script src="js/store.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/app.js"></script>
