@@ -21,9 +21,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
       # Site statique : on publie uniquement les fichiers utiles.
       - name: Préparer le site
@@ -36,9 +36,9 @@ jobs:
           touch _site/.nojekyll
           node -e 'console.log("window.MINECARTE_CONFIG = Object.assign(" + JSON.stringify({ syncUrl: process.env.SYNC_WORKER_URL || "" }) + ", window.MINECARTE_CONFIG);")' > _site/js/config.js
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
