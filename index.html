@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MineCarte</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button id="toggle-sidebar" class="icon-btn" title="Afficher / masquer le panneau" aria-label="Panneau">☰</button>
+    <h1>MineCarte</h1>
+    <nav class="dims" aria-label="Dimensions">
+      <button type="button" data-dim="overworld" class="dim-btn dim-overworld">Overworld</button>
+      <button type="button" data-dim="nether" class="dim-btn dim-nether">Nether</button>
+      <button type="button" data-dim="end" class="dim-btn dim-end">End</button>
+    </nav>
+    <form id="goto" class="goto" autocomplete="off">
+      <label>X <input name="x" type="number" step="1" required></label>
+      <label>Z <input name="z" type="number" step="1" required></label>
+      <button type="submit">Aller</button>
+    </form>
+  </header>
+
+  <div class="layout">
+    <aside id="sidebar">
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab active" data-tab="pois">POI</button>
+        <button type="button" class="tab" data-tab="paths">Chemins</button>
+        <button type="button" class="tab" data-tab="settings">Réglages</button>
+      </div>
+
+      <section class="panel active" data-panel="pois">
+        <div class="row">
+          <input id="poi-search" type="search" placeholder="Rechercher…">
+          <button type="button" id="add-poi" class="primary">+ POI</button>
+        </div>
+        <label class="check"><input type="checkbox" id="poi-all-dims"> Toutes les dimensions</label>
+        <ul id="poi-list" class="list"></ul>
+      </section>
+
+      <section class="panel" data-panel="paths">
+        <div class="row">
+          <button type="button" id="new-path" class="primary grow">+ Tracer un chemin</button>
+        </div>
+        <ul id="path-list" class="list"></ul>
+      </section>
+
+      <section class="panel" data-panel="settings">
+        <h3>Affichage</h3>
+        <label class="check"><input type="checkbox" id="opt-terrain" checked> Fond généré</label>
+        <label class="check"><input type="checkbox" id="opt-grid" checked> Grille (chunks / régions)</label>
+        <label class="check"><input type="checkbox" id="opt-labels" checked> Noms des POI</label>
+        <label class="check"><input type="checkbox" id="opt-links" checked> Traits entre POI liés</label>
+
+        <h3>Génération</h3>
+        <form id="seed-form" class="row">
+          <input id="seed" type="text" placeholder="Graine">
+          <button type="submit">Appliquer</button>
+        </form>
+        <p class="hint">Le fond est décoratif : il est généré à partir de la graine mais ne reproduit pas le vrai monde Minecraft.</p>
+
+        <h3>Données</h3>
+        <div class="row wrap">
+          <button type="button" id="export">Exporter (JSON)</button>
+          <button type="button" id="import">Importer…</button>
+          <input type="file" id="import-file" accept="application/json,.json" hidden>
+          <button type="button" id="reset" class="danger">Tout effacer</button>
+        </div>
+
+        <h3>Aide</h3>
+        <ul class="help">
+          <li><b>Clic droit</b> sur la carte : ajouter un POI, démarrer un chemin, copier les coordonnées.</li>
+          <li><b>Clic</b> sur un POI : détails, liens et actions.</li>
+          <li>Tracé : clic pour ajouter un point, clic sur un POI pour s'y accrocher, <b>double-clic</b> ou <b>Entrée</b> pour terminer, <b>Retour arrière</b> pour annuler le dernier point, <b>Échap</b> pour abandonner.</li>
+          <li>Édition d'un tracé : glissez les sommets, clic sur un segment pour insérer un point, clic droit sur un sommet pour le supprimer.</li>
+        </ul>
+      </section>
+    </aside>
+
+    <main class="map-wrap">
+      <div id="map"></div>
+      <div id="mode-banner" class="mode-banner" hidden>
+        <span id="mode-text"></span>
+        <span class="mode-actions">
+          <button type="button" id="mode-undo">Annuler le dernier point</button>
+          <button type="button" id="mode-finish" class="primary">Terminer</button>
+          <button type="button" id="mode-cancel">Abandonner</button>
+        </span>
+      </div>
+      <div id="coords" class="coords"></div>
+    </main>
+  </div>
+
+  <div id="context-menu" class="context-menu" hidden></div>
+
+  <dialog id="poi-dialog">
+    <form id="poi-form" method="dialog">
+      <h2 id="poi-dialog-title">Nouveau POI</h2>
+      <input type="hidden" name="id">
+      <label>Nom <input name="name" type="text" maxlength="100" required></label>
+      <div class="field">
+        <span>Couleur</span>
+        <div class="color-row">
+          <input name="color" type="color" value="#e53935">
+          <div class="swatches" data-target="color"></div>
+        </div>
+      </div>
+      <label>Dimension
+        <select name="dim">
+          <option value="overworld">Overworld</option>
+          <option value="nether">Nether</option>
+          <option value="end">End</option>
+        </select>
+      </label>
+      <div class="xyz">
+        <label>X <input name="x" type="number" step="1" required></label>
+        <label>Y <input name="y" type="number" step="1" required></label>
+        <label>Z <input name="z" type="number" step="1" required></label>
+      </div>
+      <div class="field">
+        <span>Liens vers d'autres POI</span>
+        <input id="poi-link-filter" type="search" placeholder="Filtrer…">
+        <div id="poi-links" class="link-picker"></div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" data-close>Annuler</button>
+        <button type="submit" class="primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="path-dialog">
+    <form id="path-form" method="dialog">
+      <h2>Chemin</h2>
+      <input type="hidden" name="id">
+      <label>Nom <input name="name" type="text" maxlength="100" required></label>
+      <div class="field">
+        <span>Couleur</span>
+        <div class="color-row">
+          <input name="color" type="color" value="#ffeb3b">
+          <div class="swatches" data-target="color"></div>
+        </div>
+      </div>
+      <p id="path-info" class="hint"></p>
+      <div class="dialog-actions">
+        <button type="button" data-close>Annuler</button>
+        <button type="submit" class="primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/noise.js"></script>
+  <script src="js/terrain.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

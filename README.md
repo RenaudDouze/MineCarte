@@ -1,0 +1,73 @@
+# MineCarte
+
+Carte interactive de monde Minecraft, inspirée de la [seed map de Chunkbase](https://www.chunkbase.com/apps/seed-map),
+construite avec [Leaflet](https://leafletjs.com/).
+
+## Lancer
+
+Aucune compilation ni dépendance à installer : ouvrez `index.html` dans un navigateur
+(Leaflet est inclus dans `vendor/leaflet`). Pour la copie dans le presse-papiers, préférez
+un petit serveur local :
+
+```sh
+python3 -m http.server 8000
+# puis http://localhost:8000
+```
+
+## Fonctionnalités
+
+- **Trois dimensions** : Overworld, Nether et End, avec un onglet chacune. Chaque dimension
+  garde sa propre vue (position et zoom).
+- **Fond généré** : un fond décoratif est généré pour chaque dimension à partir d'une graine
+  modifiable (biomes pour l'Overworld, biomes du Nether et lacs de lave, île centrale avec ses
+  piliers d'obsidienne, vide et îles extérieures au-delà de 1024 blocs pour l'End).
+  Il ne reproduit **pas** le vrai monde Minecraft d'une graine.
+- **Grille** : blocs, chunks (16) et régions (512), axes X = 0 et Z = 0. Les coordonnées sous la
+  souris s'affichent en bas à gauche (chunk, région, équivalent Nether ⇄ Overworld).
+- **POI** : ajout (bouton « + POI » ou clic droit sur la carte), modification et suppression.
+  Chaque POI a un nom, une couleur, une dimension et des coordonnées X, Y, Z. Seuls X et Z
+  servent au placement, Y est affiché pour information.
+- **Liens entre POI** : un POI peut être lié à un ou plusieurs autres POI, y compris dans une
+  autre dimension. Dans la popup d'un POI, cliquer sur un lien centre la carte sur le POI lié
+  (et change de dimension si besoin). Les POI liés d'une même dimension sont reliés par un
+  trait pointillé. Le bouton « Portail Nether / Overworld » crée un POI lié dans l'autre
+  dimension aux coordonnées converties (÷8 ou ×8).
+- **Chemins** : tracé de polylignes avec un nom et une couleur, et affichage de leur longueur
+  en blocs.
+  - Tracé : clic pour ajouter un point, clic sur un POI pour s'y accrocher, double-clic ou
+    `Entrée` pour terminer, `Retour arrière` pour annuler le dernier point, `Échap` pour abandonner.
+  - Édition : glisser un sommet pour le déplacer, clic sur un segment pour insérer un point,
+    clic droit sur un sommet pour le supprimer. « Prolonger » ajoute des points à la fin.
+- **Aller à** des coordonnées X / Z, et **URL partageable** (`#dimension/x/z/zoom`).
+- **Sauvegarde** automatique dans le navigateur (localStorage), **export et import JSON**.
+
+## Structure
+
+| Fichier | Rôle |
+| --- | --- |
+| `index.html` | Page et dialogues |
+| `css/style.css` | Styles |
+| `js/noise.js` | Bruit de valeur seedé (fBm) |
+| `js/terrain.js` | Génération des fonds des dimensions et de la grille (`L.GridLayer`) |
+| `js/store.js` | Modèle de données (POI, liens, chemins), persistance, import / export |
+| `js/app.js` | Carte, rendu, interactions |
+
+Coordonnées : la carte utilise `L.CRS.Simple`, avec 1 pixel = 1 bloc au zoom 0,
+`lng = X` et `lat = -Z` (Z croît vers le sud, comme dans le jeu).
+
+## Format des données exportées
+
+```json
+{
+  "version": 1,
+  "seed": "minecarte",
+  "pois": [
+    { "id": "…", "name": "Base", "color": "#e53935", "dim": "overworld",
+      "x": 120, "y": 64, "z": -340, "links": ["…"] }
+  ],
+  "paths": [
+    { "id": "…", "name": "Route", "color": "#ffeb3b", "dim": "nether",
+      "points": [[15, -42], [80, -42]] }
+  ]
+}
+```
