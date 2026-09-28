@@ -417,7 +417,7 @@
     const data = Object.assign({ name: '', color: '#e53935', icon: '', dim: state.dim, x: center.x, y: 64, z: center.z, links: [] }, poi);
     $('#poi-dialog-title').textContent = data.id ? 'Modifier le POI' : 'Nouveau POI';
     form.elements.id.value = data.id || '';
-    form.elements.name.value = data.name;
+    form.elements.label.value = data.name;
     form.elements.color.value = data.color;
     form.elements.dim.value = data.dim;
     form.elements.x.value = data.x;
@@ -429,8 +429,8 @@
     poiDialogLinks = new Set(data.links);
     renderLinkPicker(poiDialogLinks, data.id);
     $('#poi-dialog').showModal();
-    form.elements.name.focus();
-    form.elements.name.select();
+    form.elements.label.focus();
+    form.elements.label.select();
   }
 
   $('#poi-link-filter').addEventListener('input', () => {
@@ -497,7 +497,7 @@
     const f = e.target.elements;
     const poi = store.savePoi({
       id: f.id.value || null,
-      name: f.name.value,
+      name: f.label.value,
       color: f.color.value,
       dim: f.dim.value,
       x: f.x.value,
@@ -550,21 +550,21 @@
   function openPathDialog(path) {
     const form = $('#path-form');
     form.elements.id.value = path.id;
-    form.elements.name.value = path.name;
+    form.elements.label.value = path.name;
     form.elements.color.value = path.color;
     form.elements.weight.value = path.weight;
     updateWeightPreview();
     $('#path-info').textContent = `${DIM_LABELS[path.dim]} · ${fmt(pathLength(path.points))} blocs · ${path.points.length} points`;
     $('#path-dialog').showModal();
-    form.elements.name.focus();
-    form.elements.name.select();
+    form.elements.label.focus();
+    form.elements.label.select();
   }
 
   $('#path-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target.elements;
     const path = store.getPath(f.id.value);
-    if (path) store.savePath(Object.assign({}, path, { name: f.name.value, color: f.color.value, weight: f.weight.value }));
+    if (path) store.savePath(Object.assign({}, path, { name: f.label.value, color: f.color.value, weight: f.weight.value }));
     $('#path-dialog').close();
   });
 
