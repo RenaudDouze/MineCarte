@@ -39,8 +39,8 @@ export function blobKey(code, hash) {
 
 // Empreintes des images référencées par des données synchronisées.
 export function referencedHashes(data) {
-  const list = data && Array.isArray(data.backgrounds) ? data.backgrounds : [];
-  return new Set(list.map((bg) => bg && bg.hash).filter((h) => typeof h === 'string' && HASH_RE.test(h)));
+  // test() convertit en chaîne : ni undefined, ni un nombre ne passent.
+  return new Set([data?.backgrounds].flat().map((bg) => bg?.hash).filter((h) => HASH_RE.test(h)));
 }
 
 async function sha256Hex(buffer) {
@@ -49,14 +49,13 @@ async function sha256Hex(buffer) {
 }
 
 export function isValidPushRequest(value) {
-  return !!value && typeof value === 'object'
-    && Number.isInteger(value.baseVersion)
+  return Number.isInteger(value?.baseVersion)
     && !!value.data && typeof value.data === 'object' && !Array.isArray(value.data);
 }
 
 // Access-Control-Allow-Origin n'accepte qu'une origine nue (schéma + hôte).
+// Absente, « * » ou invalide : new URL échoue et on autorise tout.
 function allowedOrigin(env) {
-  if (!env.ALLOWED_ORIGIN || env.ALLOWED_ORIGIN === '*') return '*';
   try {
     return new URL(env.ALLOWED_ORIGIN).origin;
   } catch {
@@ -129,7 +128,7 @@ async function handlePut(request, env, code) {
 
 async function handlePutBlob(request, env, code, hash) {
   if (await env.SYNC_KV.get(kvKey(code)) === null) return json({ error: 'Code inconnu ou expiré.' }, 404, env);
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  const type = String(request.headers.get('Content-Type')).split(';')[0].trim().toLowerCase();
   if (!BLOB_TYPES.includes(type)) return json({ error: 'Type d’image non pris en charge.' }, 415, env);
   const body = await request.arrayBuffer();
   if (body.byteLength > MAX_BLOB_BYTES) return json({ error: 'Image trop volumineuse.' }, 413, env);
