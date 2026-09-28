@@ -34,7 +34,7 @@
   }
 
   function emptyData() {
-    return { version: 1, seed: 'minecarte', pois: [], paths: [] };
+    return { version: 1, seed: 'minecarte', pois: [], paths: [], backgrounds: [] };
   }
 
   // Nettoie des données venant du localStorage ou d'un import.
@@ -84,6 +84,27 @@
         dim: dimension(path.dim),
         weight: weight(path.weight),
         points,
+      });
+    }
+
+    // Fonds de carte importés : seules les métadonnées sont ici, l'image est
+    // stockée à part (IndexedDB, et dans le cloud si la synchronisation est active).
+    const SCALES = [0.25, 0.5, 1, 2, 4, 8];
+    for (const bg of Array.isArray(raw.backgrounds) ? raw.backgrounds : []) {
+      if (!bg || typeof bg !== 'object' || !/^[0-9a-f]{64}$/.test(bg.hash)) continue;
+      data.backgrounds.push({
+        id: typeof bg.id === 'string' && bg.id ? bg.id : uid(),
+        name: String(bg.name || 'Fond').slice(0, 100),
+        dim: dimension(bg.dim),
+        x: int(bg.x, 0),
+        z: int(bg.z, 0),
+        scale: SCALES.includes(Number(bg.scale)) ? Number(bg.scale) : 1,
+        opacity: Math.min(1, Math.max(0.1, Number(bg.opacity) || 1)),
+        width: Math.max(1, int(bg.width, 1)),
+        height: Math.max(1, int(bg.height, 1)),
+        visible: bg.visible !== false,
+        hash: bg.hash,
+        type: ['image/png', 'image/jpeg', 'image/webp'].includes(bg.type) ? bg.type : 'image/png',
       });
     }
     return data;
@@ -176,6 +197,23 @@
       if (input.points) path.points = input.points.map((pt) => [int(pt[0], 0), int(pt[1], 0)]);
       this.save();
       return path;
+    }
+
+    getBackground(id) {
+      return this.data.backgrounds.find((b) => b.id === id);
+    }
+
+    saveBackground(bg) {
+      const [clean] = sanitize({ backgrounds: [bg] }).backgrounds;
+      if (!clean) return null;
+      this.data.backgrounds = this.data.backgrounds.filter((b) => b.id !== clean.id).concat(clean);
+      this.save();
+      return clean;
+    }
+
+    deleteBackground(id) {
+      this.data.backgrounds = this.data.backgrounds.filter((b) => b.id !== id);
+      this.save();
     }
 
     deletePath(id) {
