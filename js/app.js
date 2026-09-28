@@ -31,7 +31,8 @@
   // --- Utilitaires -----------------------------------------------------------
 
   function loadOptions() {
-    const defaults = { terrain: true, grid: true, labels: true, links: true, allDims: false };
+    // « generated » : fond décoratif fictif, désactivé par défaut (fond neutre).
+    const defaults = { generated: false, grid: true, labels: true, links: true, allDims: false };
     try {
       return Object.assign(defaults, JSON.parse(localStorage.getItem(OPTIONS_KEY) || '{}'));
     } catch (e) {
@@ -131,11 +132,13 @@
 
   const seedValue = () => Noise.seedFrom(store.data.seed);
   const terrainLayers = {};
+  const terrainStyle = () => (state.options.generated ? 'generated' : 'neutral');
   function terrainLayer(dim) {
-    if (!terrainLayers[dim]) {
-      terrainLayers[dim] = new Terrain.TerrainLayer({ dimension: dim, seed: seedValue() });
+    const key = `${terrainStyle()}:${dim}`;
+    if (!terrainLayers[key]) {
+      terrainLayers[key] = new Terrain.TerrainLayer({ dimension: dim, style: terrainStyle(), seed: seedValue() });
     }
-    return terrainLayers[dim];
+    return terrainLayers[key];
   }
   const gridLayer = new Terrain.GridOverlay();
 
@@ -145,13 +148,15 @@
   const drawLayer = L.layerGroup().addTo(map);
 
   function applyLayers() {
-    for (const [dim, layer] of Object.entries(terrainLayers)) {
-      if (map.hasLayer(layer) && (dim !== state.dim || !state.options.terrain)) map.removeLayer(layer);
+    const current = terrainLayer(state.dim);
+    for (const layer of Object.values(terrainLayers)) {
+      if (layer !== current && map.hasLayer(layer)) map.removeLayer(layer);
     }
-    if (state.options.terrain && !map.hasLayer(terrainLayer(state.dim))) terrainLayer(state.dim).addTo(map);
+    if (!map.hasLayer(current)) current.addTo(map);
+    $('#fake-note').hidden = !state.options.generated;
     if (state.options.grid && !map.hasLayer(gridLayer)) gridLayer.addTo(map);
     if (!state.options.grid && map.hasLayer(gridLayer)) map.removeLayer(gridLayer);
-    map.getContainer().style.background = Terrain.background[state.dim];
+    map.getContainer().style.background = Terrain.background[terrainStyle()][state.dim];
     map.getContainer().classList.toggle('hide-labels', !state.options.labels);
   }
 
@@ -966,7 +971,7 @@
   });
 
   // Réglages
-  const optionInputs = { terrain: '#opt-terrain', grid: '#opt-grid', labels: '#opt-labels', links: '#opt-links', allDims: '#poi-all-dims' };
+  const optionInputs = { generated: '#opt-generated', grid: '#opt-grid', labels: '#opt-labels', links: '#opt-links', allDims: '#poi-all-dims' };
   for (const [key, sel] of Object.entries(optionInputs)) {
     const input = $(sel);
     input.checked = !!state.options[key];

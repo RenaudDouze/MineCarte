@@ -195,6 +195,20 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
   text-overflow: ellipsis;
 }
 
+.fake-note {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 800;
+  background: rgba(15, 17, 21, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.fake-note[hidden] { display: none; }
+
 .mode-banner {
   position: absolute;
   top: 10px;
@@ -419,6 +433,20 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   .goto { margin-left: 0; width: 100%; }
   .goto input, .goto input[name="y"] { width: 50px; flex: 1; }
   #sidebar { position: absolute; top: 0; bottom: 0; left: 0; box-shadow: 8px 0 24px rgba(0, 0, 0, 0.4); }
-  .mode-banner { max-width: calc(100% - 20px); top: auto; bottom: 44px; font-size: 12.5px; }
+  .fake-note {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 800;
+  background: rgba(15, 17, 21, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.fake-note[hidden] { display: none; }
+
+.mode-banner { max-width: calc(100% - 20px); top: auto; bottom: 44px; font-size: 12.5px; }
   .coords { font-size: 11px; }
 }

@@ -103,7 +103,9 @@
     return [Math.round(42 * Math.cos(angle)), Math.round(42 * Math.sin(angle)), 3 + (i % 3)];
   });
 
-  function end(x, z, seed) {
+  // outer = false : uniquement ce qui correspond au vrai jeu (île centrale,
+  // piliers, portail de sortie, vide), sans les îles extérieures inventées.
+  function end(x, z, seed, outer = true) {
     const d = Math.sqrt(x * x + z * z);
     if (d < 4) return END.bedrock;
     for (const [px, pz, r] of PILLARS) {
@@ -112,7 +114,7 @@
     const angle = Math.atan2(z, x);
     const edge = 115 + (fbm(Math.cos(angle) * 3 + 10, Math.sin(angle) * 3 + 10, seed + 211, 3) - 0.5) * 90;
     if (d < edge) return END.stone;
-    if (d > 1024) {
+    if (outer && d > 1024) {
       const falloff = Math.min(1, (d - 1024) / 400);
       const n = fbm(x / 140, z / 140, seed + 223, 4);
       if (n > 0.71 - 0.04 * falloff) {
@@ -124,9 +126,23 @@
 
   const GENERATORS = { overworld, nether, end };
 
+  // Fond neutre (par défaut) : un aplat légèrement texturé par dimension, qui ne
+  // peut pas être pris pour un vrai terrain. Seule l'île centrale de l'End est
+  // dessinée, car sa forme générale est la même dans tous les mondes.
+  const NEUTRAL_COLORS = {
+    overworld: hex('#8e9985'),
+    nether: hex('#5a2b2b'),
+  };
+  const NEUTRAL = {
+    overworld: () => NEUTRAL_COLORS.overworld,
+    nether: () => NEUTRAL_COLORS.nether,
+    end: (x, z, seed) => end(x, z, seed, false),
+  };
+
   const TerrainLayer = L.GridLayer.extend({
     options: {
       dimension: 'overworld',
+      style: 'neutral', // 'neutral' ou 'generated' (fond décoratif fictif)
       seed: 0,
       samples: 128,
       minZoom: -8,
@@ -151,7 +167,10 @@
       const x0 = coords.x * blocksPerTile;
       const z0 = coords.y * blocksPerTile;
 
-      const generate = GENERATORS[this.options.dimension];
+      const neutral = this.options.style !== 'generated';
+      const generate = (neutral ? NEUTRAL : GENERATORS)[this.options.dimension];
+      // Texture : variation de teinte par carré de 4 blocs, plus discrète en neutre.
+      const [shadeBase, shadeAmp] = neutral ? [0.97, 0.05] : [0.93, 0.1];
       const seed = this.options.seed;
       const buf = document.createElement('canvas');
       buf.width = n;
@@ -166,7 +185,7 @@
           const x = Math.floor(x0 + i * step);
           const c = generate(x, z, seed);
           // Légère variation pour donner du relief.
-          const shade = 0.93 + 0.1 * hash2(x >> 2, z >> 2, seed + 7);
+          const shade = shadeBase + shadeAmp * hash2(x >> 2, z >> 2, seed + 7);
           const k = (j * n + i) * 4;
           data[k] = c[0] * shade;
           data[k + 1] = c[1] * shade;
@@ -250,10 +269,10 @@
     TerrainLayer,
     GridOverlay,
     generators: GENERATORS,
+    // Couleur du conteneur pendant le chargement des tuiles.
     background: {
-      overworld: '#2f52b0',
-      nether: '#8a3030',
-      end: '#0c0918',
+      neutral: { overworld: '#8e9985', nether: '#5a2b2b', end: '#0c0918' },
+      generated: { overworld: '#2f52b0', nether: '#8a3030', end: '#0c0918' },
     },
   };
 })(window);
