@@ -26,8 +26,9 @@ python3 -m http.server 8000
   chemins, dans la dimension choisie. On indique les coordonnées du bloc en haut à gauche (coin
   nord-ouest) et l'échelle de l'export (de 4 pixels par bloc à 1 pixel pour 8 blocs), avec une
   opacité réglable. Plusieurs fonds possibles, affichables / masquables, modifiables. Les images
-  restent sur l'appareil (IndexedDB) : elles ne font partie ni de l'export JSON ni de la
-  synchronisation cloud.
+  sont gardées sur l'appareil (IndexedDB) et, avec la synchronisation cloud, envoyées au worker
+  (20 Mo max par image) : les autres appareils reliés les téléchargent automatiquement. L'export
+  JSON contient la description des fonds mais pas les images.
 - **Grille** : blocs, chunks (16) et régions (512), axes X = 0 et Z = 0. Les coordonnées sous la
   souris s'affichent en bas à gauche (chunk, région, équivalent Nether ⇄ Overworld).
 - **POI** : ajout (bouton « + POI » ou clic droit sur la carte), modification et suppression.
@@ -70,7 +71,7 @@ python3 -m http.server 8000
 | `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
 | `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |
 | `worker/` | Worker Cloudflare de synchronisation |
-| `js/backgrounds.js` | Stockage des fonds importés (IndexedDB) |
+| `js/backgrounds.js` | Images des fonds importés (IndexedDB, par empreinte SHA-256) |
 | `js/store.js` | Modèle de données (POI, liens, chemins), persistance, import / export |
 | `js/app.js` | Carte, rendu, interactions |
 
@@ -90,6 +91,11 @@ Coordonnées : la carte utilise `L.CRS.Simple`, avec 1 pixel = 1 bloc au zoom 0,
   "paths": [
     { "id": "…", "name": "Route", "color": "#ffeb3b", "dim": "nether", "weight": 4,
       "points": [[15, -42], [80, -42]] }
+  ],
+  "backgrounds": [
+    { "id": "…", "name": "Spawn", "dim": "overworld", "x": -512, "z": -512, "scale": 1,
+      "opacity": 1, "width": 1024, "height": 1024, "visible": true,
+      "hash": "<sha-256 de l'image>", "type": "image/png" }
   ]
 }
 ```

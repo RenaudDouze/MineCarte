@@ -381,6 +381,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .bg-image { image-rendering: pixelated; }
 .bg-item { cursor: default; }
 .bg-item .item-main { cursor: pointer; }
+.bg-status { color: #f0c64a; }
 .bg-item .icon-btn { padding: 2px 7px; font-size: 13px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
