@@ -27,10 +27,14 @@ jobs:
 
       # Site statique : on publie uniquement les fichiers utiles.
       - name: Préparer le site
+        env:
+          # URL du worker de synchronisation (variable de dépôt, voir worker/README.md).
+          SYNC_WORKER_URL: ${{ vars.SYNC_WORKER_URL }}
         run: |
           mkdir _site
           cp -r index.html css js vendor _site/
           touch _site/.nojekyll
+          node -e 'console.log("window.MINECARTE_CONFIG = Object.assign(" + JSON.stringify({ syncUrl: process.env.SYNC_WORKER_URL || "" }) + ", window.MINECARTE_CONFIG);")' > _site/js/config.js
 
       - uses: actions/upload-pages-artifact@v3
         with:

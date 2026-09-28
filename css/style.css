@@ -378,6 +378,25 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 #weight-preview { width: 100%; border-radius: 8px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
+.sync-badge {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.sync-badge[hidden] { display: none; }
+.sync-badge[data-kind="idle"] { color: #7ed67f; }
+.sync-badge[data-kind="pending"], .sync-badge[data-kind="syncing"] { color: #f0c64a; }
+.sync-badge[data-kind="error"] { color: #ff8589; border-color: var(--danger); }
+.sync-badge[data-kind="off"] { color: var(--muted); }
+#sync-section[hidden], #sync-off[hidden], #sync-on[hidden] { display: none; }
+#sync-join { margin-top: 6px; }
+.sync-code-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sync-code { font: 600 18px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 2px; flex: 1; }
+.sync-status { font-size: 12.5px; margin: 8px 0 4px; color: var(--muted); }
+.sync-status[data-kind="error"] { color: #ff9a9d; }
+.sync-status[data-kind="idle"] { color: #9be09e; }
+
 .toast {
   position: fixed;
   bottom: 24px;

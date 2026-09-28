@@ -47,6 +47,10 @@ python3 -m http.server 8000
   ou au tracé en cours.
 - **URL partageable** (`#dimension/x/z/zoom`).
 - **Sauvegarde** automatique dans le navigateur (localStorage), **export et import JSON**.
+- **Synchronisation cloud par code** (Réglages) : « Créer un code » sur un appareil, puis
+  « Rejoindre » avec ce code sur les autres. Les modifications sont synchronisées
+  automatiquement ; en cas de modifications simultanées, les données sont fusionnées POI par
+  POI et chemin par chemin. Nécessite un petit worker Cloudflare : voir `worker/README.md`.
 
 ## Structure
 
@@ -57,6 +61,9 @@ python3 -m http.server 8000
 | `js/noise.js` | Bruit de valeur seedé (fBm) |
 | `js/terrain.js` | Génération des fonds des dimensions et de la grille (`L.GridLayer`) |
 | `js/icons.js` | Chargement et recherche des icônes d'items |
+| `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
+| `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |
+| `worker/` | Worker Cloudflare de synchronisation |
 | `js/store.js` | Modèle de données (POI, liens, chemins), persistance, import / export |
 | `js/app.js` | Carte, rendu, interactions |
 

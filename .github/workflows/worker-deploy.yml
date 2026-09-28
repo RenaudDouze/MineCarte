@@ -1,0 +1,81 @@
+name: Déploiement du worker de synchronisation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - worker/**
+      - .github/workflows/worker-deploy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests
+        run: node --test
+
+      # Configuration par variables et secrets du dépôt (voir worker/README.md).
+      # S'il en manque, on s'arrête après les tests.
+      - name: Configurer
+        id: config
+        env:
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+          KV_ID: ${{ vars.CLOUDFLARE_KV_NAMESPACE_ID }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::warning::Secrets CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID absents : worker non déployé."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          elif ! [[ "$KV_ID" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "::warning::Variable CLOUDFLARE_KV_NAMESPACE_ID absente ou invalide (32 caractères hexadécimaux) : worker non déployé."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            sed -i "s/__CLOUDFLARE_KV_NAMESPACE_ID__/$KV_ID/" wrangler.toml
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Déployer
+        id: wrangler
+        if: steps.config.outputs.deploy == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+
+      - name: URL du worker
+        if: steps.config.outputs.deploy == 'true'
+        env:
+          URL: ${{ steps.wrangler.outputs.deployment-url }}
+        run: |
+          echo "Worker déployé : $URL"
+          echo "### Worker déployé : $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "À renseigner dans la variable de dépôt SYNC_WORKER_URL (sans slash final)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Vérification après déploiement
+        if: steps.config.outputs.deploy == 'true' && vars.SYNC_WORKER_URL != ''
+        env:
+          SYNC_WORKER_URL: ${{ vars.SYNC_WORKER_URL }}
+        run: |
+          # 404 attendu : code valide mais jamais attribué (lecture seule, aucune écriture KV).
+          code=$(curl -sS -o /dev/null -w '%{http_code}' "$SYNC_WORKER_URL/api/sync/AAAAAAAA")
+          if [ "$code" != "404" ]; then
+            echo "::error::Le worker répond $code au lieu de 404."
+            exit 1
+          fi

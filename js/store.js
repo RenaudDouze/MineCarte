@@ -105,13 +105,14 @@
       }
     }
 
-    save() {
+    // source : 'remote' quand la modification vient de la synchronisation cloud.
+    save(source) {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
       } catch (e) {
         console.warn('Impossible de sauvegarder les données', e);
       }
-      this.listeners.forEach((fn) => fn(this.data));
+      this.listeners.forEach((fn) => fn(this.data, source));
     }
 
     onChange(fn) {
@@ -189,9 +190,9 @@
       this.save();
     }
 
-    replaceAll(raw) {
+    replaceAll(raw, source) {
       this.data = sanitize(raw);
-      this.save();
+      this.save(source);
     }
 
     exportJson() {
