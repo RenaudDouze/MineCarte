@@ -376,6 +376,12 @@ input[type="color"] { width: 42px; height: 32px; padding: 2px; border: 1px solid
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 .weight-preview-box { height: 20px; display: flex; align-items: center; padding: 0 4px; background: #14161b; border: 1px solid var(--border); border-radius: 6px; }
 #weight-preview { width: 100%; border-radius: 8px; }
+.xyz.xz { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#bg-center { align-self: flex-start; margin-top: 4px; }
+.bg-image { image-rendering: pixelated; }
+.bg-item { cursor: default; }
+.bg-item .item-main { cursor: pointer; }
+.bg-item .icon-btn { padding: 2px 7px; font-size: 13px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
 .sync-badge {

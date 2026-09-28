@@ -21,6 +21,13 @@ python3 -m http.server 8000
 - **Fond neutre** : un aplat légèrement texturé par dimension, pour ne pas être confondu avec
   une vraie carte. Dans l'End, seuls l'île centrale, ses piliers et le vide sont dessinés, car ils
   sont les mêmes dans tous les mondes.
+- **Fonds de carte importés (uNmINeD)** : Réglages → « Importer une image… ». Une image de ton
+  monde exportée depuis [uNmINeD](https://unmined.net/) s'affiche sous la grille, les POI et les
+  chemins, dans la dimension choisie. On indique les coordonnées du bloc en haut à gauche (coin
+  nord-ouest) et l'échelle de l'export (de 4 pixels par bloc à 1 pixel pour 8 blocs), avec une
+  opacité réglable. Plusieurs fonds possibles, affichables / masquables, modifiables. Les images
+  restent sur l'appareil (IndexedDB) : elles ne font partie ni de l'export JSON ni de la
+  synchronisation cloud.
 - **Grille** : blocs, chunks (16) et régions (512), axes X = 0 et Z = 0. Les coordonnées sous la
   souris s'affichent en bas à gauche (chunk, région, équivalent Nether ⇄ Overworld).
 - **POI** : ajout (bouton « + POI » ou clic droit sur la carte), modification et suppression.
@@ -63,6 +70,7 @@ python3 -m http.server 8000
 | `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
 | `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |
 | `worker/` | Worker Cloudflare de synchronisation |
+| `js/backgrounds.js` | Stockage des fonds importés (IndexedDB) |
 | `js/store.js` | Modèle de données (POI, liens, chemins), persistance, import / export |
 | `js/app.js` | Carte, rendu, interactions |
 

@@ -125,6 +125,7 @@
     attributionControl: false,
     boxZoom: false,
   });
+  map.createPane('imagePane').style.zIndex = 220;
   map.createPane('gridPane').style.zIndex = 250;
   map.createPane('linkPane').style.zIndex = 390;
   map.createPane('pathPane').style.zIndex = 395;
@@ -151,6 +152,7 @@
     if (!state.options.grid && map.hasLayer(gridLayer)) map.removeLayer(gridLayer);
     map.getContainer().style.background = Terrain.background[state.dim];
     map.getContainer().classList.toggle('hide-labels', !state.options.labels);
+    renderBackgrounds();
   }
 
   function setDimension(dim, view) {
@@ -1008,6 +1010,192 @@
     cancelMode();
     map.closePopup();
     store.replaceAll({ seed: store.data.seed });
+  });
+
+  // --- Fonds de carte importés (uNmINeD) ----------------------------------------------
+
+  const bgState = { list: [], overlays: new Map() };
+  const SCALE_LABELS = {
+    0.25: '4 px par bloc', 0.5: '2 px par bloc', 1: '1 px par bloc', 2: '1 px = 2 blocs', 4: '1 px = 4 blocs', 8: '1 px = 8 blocs',
+  };
+
+  // Emprise de l'image en coordonnées Leaflet (bords des blocs, pas leur centre).
+  function bgBounds(bg) {
+    const x2 = bg.x + bg.width * bg.scale;
+    const z2 = bg.z + bg.height * bg.scale;
+    return L.latLngBounds([-bg.z, bg.x], [-z2, x2]);
+  }
+
+  function bgOverlay(bg) {
+    let entry = bgState.overlays.get(bg.id);
+    if (entry && entry.blob !== bg.blob) {
+      map.removeLayer(entry.overlay);
+      URL.revokeObjectURL(entry.url);
+      entry = null;
+    }
+    if (!entry) {
+      const url = URL.createObjectURL(bg.blob);
+      const overlay = L.imageOverlay(url, bgBounds(bg), { pane: 'imagePane', className: 'bg-image', interactive: false });
+      entry = { overlay, url, blob: bg.blob };
+      bgState.overlays.set(bg.id, entry);
+    }
+    entry.overlay.setBounds(bgBounds(bg));
+    entry.overlay.setOpacity(bg.opacity);
+    return entry.overlay;
+  }
+
+  function renderBackgrounds() {
+    for (const [id, entry] of bgState.overlays) {
+      if (bgState.list.some((bg) => bg.id === id)) continue;
+      map.removeLayer(entry.overlay);
+      URL.revokeObjectURL(entry.url);
+      bgState.overlays.delete(id);
+    }
+    for (const bg of bgState.list) {
+      const overlay = bgOverlay(bg);
+      const show = bg.visible && bg.dim === state.dim;
+      if (show && !map.hasLayer(overlay)) overlay.addTo(map);
+      if (!show && map.hasLayer(overlay)) map.removeLayer(overlay);
+    }
+    renderBgList();
+  }
+
+  function renderBgList() {
+    const list = $('#bg-list');
+    const items = bgState.list
+      .slice()
+      .sort((a, b) => DIMENSIONS.indexOf(a.dim) - DIMENSIONS.indexOf(b.dim) || a.name.localeCompare(b.name, 'fr'));
+    list.replaceChildren(...items.map((bg) => h('li', { class: 'item bg-item' },
+      h('input', {
+        type: 'checkbox',
+        checked: bg.visible,
+        title: 'Afficher / masquer',
+        onchange: (e) => saveBackground(Object.assign({}, bg, { visible: e.target.checked })),
+      }),
+      h('span', { class: 'item-main', onclick: () => focusBackground(bg) },
+        h('span', { class: 'item-name' }, bg.name),
+        h('span', { class: 'item-sub' }, `${DIM_LABELS[bg.dim]} · X ${bg.x}, Z ${bg.z}`),
+        h('span', { class: 'item-sub' }, `${bg.width}×${bg.height} px · ${SCALE_LABELS[bg.scale]}`)),
+      h('button', { type: 'button', class: 'icon-btn', title: 'Modifier', onclick: () => openBgDialog(bg) }, '✎'),
+      h('button', {
+        type: 'button',
+        class: 'icon-btn danger',
+        title: 'Supprimer',
+        onclick: async () => {
+          if (!confirm(`Supprimer le fond « ${bg.name} » de cet appareil ?`)) return;
+          await Backgrounds.remove(bg.id);
+          bgState.list = bgState.list.filter((b) => b.id !== bg.id);
+          renderBackgrounds();
+        },
+      }, '🗑'))));
+    if (!items.length) list.append(h('li', { class: 'empty' }, 'Aucun fond importé.'));
+  }
+
+  function focusBackground(bg) {
+    if (bg.dim !== state.dim) setDimension(bg.dim);
+    map.fitBounds(bgBounds(bg), { animate: false });
+    closeSidebarOnMobile();
+  }
+
+  async function saveBackground(bg) {
+    await Backgrounds.put(bg);
+    bgState.list = bgState.list.filter((b) => b.id !== bg.id).concat(bg);
+    renderBackgrounds();
+  }
+
+  let bgDialogSize = null;
+  function updateBgInfo() {
+    const f = $('#bg-form').elements;
+    const scale = Number(f.scale.value);
+    const size = bgDialogSize;
+    $('#bg-info').textContent = size
+      ? `Image de ${size.width}×${size.height} px : couvre X ${f.x.value} → ${Number(f.x.value) + size.width * scale}, ` +
+        `Z ${f.z.value} → ${Number(f.z.value) + size.height * scale}.`
+      : 'Choisis une image pour voir la zone couverte.';
+  }
+
+  function openBgDialog(bg) {
+    const form = $('#bg-form');
+    form.reset();
+    const center = fromLatLng(map.getCenter());
+    const data = Object.assign({ id: '', name: '', dim: state.dim, x: center.x, z: center.z, scale: 1, opacity: 1 }, bg);
+    $('#bg-dialog-title').textContent = bg ? 'Modifier le fond' : 'Importer un fond de carte';
+    form.elements.id.value = data.id;
+    form.elements.label.value = data.name;
+    form.elements.dim.value = data.dim;
+    form.elements.x.value = data.x;
+    form.elements.z.value = data.z;
+    form.elements.scale.value = String(data.scale);
+    form.elements.opacity.value = Math.round(data.opacity * 100);
+    form.elements.file.required = !bg;
+    bgDialogSize = bg ? { width: bg.width, height: bg.height } : null;
+    updateBgInfo();
+    $('#bg-dialog').showModal();
+  }
+
+  $('#bg-add').addEventListener('click', () => openBgDialog(null));
+  ['x', 'z', 'scale'].forEach((n) => $('#bg-form').elements[n].addEventListener('input', updateBgInfo));
+
+  $('#bg-form').elements.file.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      bgDialogSize = await Backgrounds.imageSize(file);
+      const f = $('#bg-form').elements;
+      if (!f.label.value) f.label.value = file.name.replace(/\.[^.]+$/, '');
+    } catch (err) {
+      bgDialogSize = null;
+      toast('Image illisible.');
+    }
+    updateBgInfo();
+  });
+
+  // Place l'image au centre de la vue actuelle (quand on ne connaît pas ses coordonnées).
+  $('#bg-center').addEventListener('click', () => {
+    if (!bgDialogSize) return toast('Choisis d’abord une image.');
+    const f = $('#bg-form').elements;
+    const scale = Number(f.scale.value);
+    const c = fromLatLng(map.getCenter());
+    f.x.value = Math.round(c.x - (bgDialogSize.width * scale) / 2);
+    f.z.value = Math.round(c.z - (bgDialogSize.height * scale) / 2);
+    updateBgInfo();
+  });
+
+  $('#bg-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target.elements;
+    const existing = bgState.list.find((b) => b.id === f.id.value);
+    const file = f.file.files[0];
+    if (!file && !existing) return;
+    try {
+      const size = file ? await Backgrounds.imageSize(file) : { width: existing.width, height: existing.height };
+      const bg = {
+        id: existing ? existing.id : `bg-${Date.now().toString(36)}`,
+        name: f.label.value.trim() || 'Fond',
+        dim: f.dim.value,
+        x: Math.round(Number(f.x.value)) || 0,
+        z: Math.round(Number(f.z.value)) || 0,
+        scale: Number(f.scale.value),
+        opacity: Math.min(1, Math.max(0.1, Number(f.opacity.value) / 100)),
+        width: size.width,
+        height: size.height,
+        visible: existing ? existing.visible : true,
+        blob: file || existing.blob,
+      };
+      await saveBackground(bg);
+      $('#bg-dialog').close();
+      if (!existing) focusBackground(bg);
+    } catch (err) {
+      alert(`Impossible d'enregistrer le fond : ${err.message || err}`);
+    }
+  });
+
+  Backgrounds.list().then((list) => {
+    bgState.list = list;
+    renderBackgrounds();
+  }, () => {
+    $('#bg-list').replaceChildren(h('li', { class: 'empty' }, 'Stockage local indisponible : import impossible dans ce navigateur.'));
+    $('#bg-add').disabled = true;
   });
 
   // --- Synchronisation cloud --------------------------------------------------------
