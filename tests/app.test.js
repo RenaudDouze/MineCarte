@@ -1,0 +1,1575 @@
+import { describe, test, expect, afterEach, vi } from 'vitest';
+import { Blob as NodeBlob } from 'node:buffer';
+import { createHash } from 'node:crypto';
+import { IDBFactory } from 'fake-indexeddb';
+import { boot, teardown } from './helpers/app.js';
+import { createServer } from './helpers/server.js';
+
+afterEach(async () => {
+  // Laisse finir les chargements d'images en cours avant de détruire la carte.
+  vi.useRealTimers();
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+  teardown();
+  // Les tests n'installent de fausses minuteries qu'après boot() : sinon
+  // unstubAllGlobals remettrait un faux setTimeout déjà désinstallé.
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => [...document.querySelectorAll(sel)];
+const text = (sel) => $(sel).textContent;
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const flush = async (n = 5) => { for (let i = 0; i < n; i++) await tick(); };
+// Bouton visible dont le texte contient `label` (popups, menus…).
+function button(label, root = document) {
+  const found = [...root.querySelectorAll('button')].find((b) => b.textContent.includes(label));
+  if (!found) throw new Error(`Bouton « ${label} » introuvable`);
+  return found;
+}
+const popup = () => $('.leaflet-popup-content');
+const input = (el, value) => { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
+const change = (el, value) => { if (typeof value === 'boolean') el.checked = value; else el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); };
+const submit = (form) => form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+const key = (k, opts = {}, target = document.body) => {
+  const e = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts });
+  target.dispatchEvent(e);
+  return e;
+};
+const layers = (app, pred) => { const out = []; app.map.eachLayer((l) => { if (pred(l)) out.push(l); }); return out; };
+const ll = (x, z) => Utils.toLatLng(x, z);
+// Couleur telle que jsdom la normalise dans style.background.
+const css = (color) => { const d = document.createElement('div'); d.style.background = color; return d.style.background; };
+
+const POI = (o) => ({ name: 'P', color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, links: [], ...o });
+const DATA = (o) => ({ seed: 's', pois: [], paths: [], backgrounds: [], ...o });
+const withData = (data, extra = {}) => boot({ ...extra, storage: { 'minecarte:data': DATA(data), ...extra.storage } });
+
+describe('démarrage et options', () => {
+  test('dimension initiale, panneau et grille par défaut', async () => {
+    const app = await boot();
+    expect(app.state.dim).toBe('overworld');
+    expect(document.body.dataset.dim).toBe('overworld');
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(false);
+    expect($('.dim-btn[data-dim="overworld"]').classList.contains('active')).toBe(true);
+    expect($('.dim-btn[data-dim="nether"]').classList.contains('active')).toBe(false);
+    expect(app.map.getContainer().style.background).toBe(css(Terrain.background.overworld));
+    expect($('#opt-grid').checked).toBe(true);
+    expect($('#opt-labels').checked).toBe(true);
+    expect($('#opt-links').checked).toBe(true);
+    expect($('#poi-all-dims').checked).toBe(false);
+    expect(layers(app, (l) => l instanceof Terrain.GridOverlay)).toHaveLength(1);
+    expect(location.hash).toBe('#overworld/0/0/0');
+    expect(text('#coords')).toBe('X 0  Z 0  ·  Chunk 0, 0  ·  Région r.0.0  ·  Nether ≈ 0, 0');
+    expect($('#sync-section').hidden).toBe(true);
+    expect(app.map.getPane('imagePane').style.zIndex).toBe('220');
+    expect(app.map.getPane('gridPane').style.zIndex).toBe('250');
+    expect(app.map.getPane('linkPane').style.zIndex).toBe('390');
+    expect(app.map.getPane('pathPane').style.zIndex).toBe('395');
+    expect(app.map.options.crs).toBe(L.CRS.Simple);
+    expect([app.map.getMinZoom(), app.map.getMaxZoom()]).toEqual([-6, 5]);
+    expect(app.map.options.zoomSnap).toBe(1);
+    expect(app.map.options.boxZoom).toBe(false);
+    expect(app.map.attributionControl).toBeUndefined();
+  });
+
+  test('ancre de départ et écran étroit', async () => {
+    const app = await boot({ hash: '#nether/80/-16/2', width: 500 });
+    expect(app.state.dim).toBe('nether');
+    expect(app.map.getZoom()).toBe(2);
+    expect(app.map.getCenter()).toEqual(ll(80, -16));
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+    expect(text('#coords')).toBe('X 80  Z -16  ·  Chunk 5, -1  ·  Région r.0.-1  ·  Overworld ≈ 640, -128');
+  });
+
+  test('options enregistrées, illisibles ou partielles', async () => {
+    let app = await boot({ storage: { 'minecarte:options': { grid: false, labels: false, links: false, allDims: true } } });
+    expect($('#opt-grid').checked).toBe(false);
+    expect($('#poi-all-dims').checked).toBe(true);
+    expect(layers(app, (l) => l instanceof Terrain.GridOverlay)).toHaveLength(0);
+    expect(app.map.getContainer().classList.contains('hide-labels')).toBe(true);
+    app = await boot({ storage: { 'minecarte:options': '{pas du json' } });
+    expect(app.state.options).toEqual({ grid: true, labels: true, links: true, allDims: false });
+    app = await boot({ storage: { 'minecarte:options': { labels: false } } });
+    expect(app.state.options).toEqual({ grid: true, labels: false, links: true, allDims: false });
+  });
+
+  test('changer une option : enregistrée et appliquée', async () => {
+    const app = await boot();
+    change($('#opt-grid'), false);
+    expect(JSON.parse(localStorage.getItem('minecarte:options')).grid).toBe(false);
+    expect(layers(app, (l) => l instanceof Terrain.GridOverlay)).toHaveLength(0);
+    change($('#opt-grid'), true);
+    expect(layers(app, (l) => l instanceof Terrain.GridOverlay)).toHaveLength(1);
+    change($('#opt-labels'), false);
+    expect(app.map.getContainer().classList.contains('hide-labels')).toBe(true);
+    // Stockage plein : l'option s'applique quand même.
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('plein'); });
+    change($('#opt-labels'), true);
+    expect(app.state.options.labels).toBe(true);
+    expect(app.map.getContainer().classList.contains('hide-labels')).toBe(false);
+  });
+
+  test('sans configuration : pas de synchronisation', async () => {
+    const app = await boot({ before: (w) => { delete w.MINECARTE_CONFIG; } });
+    expect(app.cloud.enabled).toBe(false);
+  });
+});
+
+describe('dimensions', () => {
+  test('bascule : vue mémorisée par dimension, couches remplacées', async () => {
+    const app = await boot();
+    app.map.setView(ll(100, 50), 2, { animate: false });
+    $('.dim-btn[data-dim="nether"]').click();
+    expect(app.state.dim).toBe('nether');
+    expect(app.map.getZoom()).toBe(1);
+    expect($('.dim-btn[data-dim="nether"]').classList.contains('active')).toBe(true);
+    expect($('.dim-btn[data-dim="overworld"]').classList.contains('active')).toBe(false);
+    const terrains = layers(app, (l) => l instanceof Terrain.TerrainLayer);
+    expect(terrains).toHaveLength(1);
+    expect(terrains[0].options.dimension).toBe('nether');
+    expect(app.map.getContainer().style.background).toBe(css(Terrain.background.nether));
+    $('.dim-btn[data-dim="overworld"]').click();
+    expect(app.map.getZoom()).toBe(2);
+    expect(app.map.getCenter()).toEqual(ll(100, 50));
+    expect(layers(app, (l) => l instanceof Terrain.TerrainLayer)[0].options.dimension).toBe('overworld');
+  });
+
+  test('même dimension : rien ne change', async () => {
+    const app = await boot();
+    app.map.setView(ll(10, 10), 3, { animate: false });
+    $('.dim-btn[data-dim="overworld"]').click();
+    expect(app.map.getZoom()).toBe(3);
+  });
+
+  test('ancre modifiée à la main', async () => {
+    const app = await boot();
+    location.hash = '#end/5/6/-1';
+    await new Promise((r) => window.addEventListener('hashchange', r, { once: true }));
+    expect(app.state.dim).toBe('end');
+    expect(app.map.getZoom()).toBe(-1);
+    expect(text('#coords')).toBe('X 5  Z 6  ·  Chunk 0, 0  ·  Région r.0.0');
+    location.hash = '#rien';
+    await new Promise((r) => window.addEventListener('hashchange', r, { once: true }));
+    expect(app.state.dim).toBe('end');
+  });
+
+  test('l’ancre suit les déplacements', async () => {
+    const app = await boot();
+    app.map.setView(ll(-33, 12), 1, { animate: false });
+    expect(location.hash).toBe('#overworld/-33/12/1');
+  });
+});
+
+const MANIFEST = {
+  items: [
+    { id: 'minecraft:diamond', readable: 'Diamond', texture: 'item/diamond.png' },
+    { id: 'minecraft:totem_of_undying', readable: 'Totem of Undying', texture: 'item/totem.png' },
+  ],
+};
+const TEX = 'https://cdn.jsdelivr.net/npm/minecraft-textures@26.3.0/dist/textures/assets/item/diamond.png';
+function iconFetch({ fail = false } = {}) {
+  return vi.fn(async (url) => {
+    if (String(url).includes('/manifest/')) return fail ? new Response('', { status: 503 }) : Response.json(MANIFEST);
+    return new Response('{}', { status: 500 });
+  });
+}
+
+describe('POI sur la carte', () => {
+  const pois = [
+    POI({ id: 'a', name: 'Alpha', x: 10, z: 20, links: ['b', 'n'] }),
+    POI({ id: 'b', name: 'Beta', color: '#1e88e5', x: -5, y: 70, z: 3, links: ['a'] }),
+    POI({ id: 'n', name: 'Nether', dim: 'nether', x: 1, z: 2, links: ['a'] }),
+  ];
+
+  test('marqueurs de la dimension, étiquettes et liens (un seul trait par paire)', async () => {
+    const app = await withData({ pois });
+    expect([...app.state.markers.keys()]).toEqual(['a', 'b']);
+    const el = app.state.markers.get('b').getElement();
+    expect(el.title).toBe('Beta (-5, 70, 3)');
+    expect(el.querySelector('.poi-label').textContent).toBe('Beta');
+    expect(el.querySelector('.poi-pin').getAttribute('style')).toBe('background:#1e88e5');
+    expect(el.classList.contains('poi-icon')).toBe(true);
+    expect(app.state.markers.get('a').options.riseOnHover).toBe(true);
+    const links = layers(app, (l) => l instanceof L.Polyline && l.options.pane === 'linkPane');
+    expect(links).toHaveLength(1);
+    expect(links[0].options).toMatchObject({ color: '#ffffff', weight: 2, opacity: 0.7, dashArray: '4 6', interactive: false });
+    expect(links[0].getLatLngs()).toEqual([ll(10, 20), ll(-5, 3)]);
+    change($('#opt-links'), false);
+    expect(layers(app, (l) => l instanceof L.Polyline && l.options.pane === 'linkPane')).toHaveLength(0);
+  });
+
+  test('nom échappé dans l’étiquette', async () => {
+    const app = await withData({ pois: [POI({ id: 'x', name: '<b>x</b>' })] });
+    expect(app.state.markers.get('x').getElement().querySelector('.poi-label').innerHTML).toBe('&lt;b&gt;x&lt;/b&gt;');
+  });
+
+  test('icône d’item : image une fois la liste chargée', async () => {
+    const app = await withData({ pois: [POI({ id: 'x', name: 'Mine', icon: 'minecraft:diamond' })] }, { fetch: iconFetch() });
+    await flush();
+    const pin = app.state.markers.get('x').getElement().querySelector('.poi-pin');
+    expect(pin.classList.contains('poi-pin-item')).toBe(true);
+    expect(pin.getAttribute('style')).toBe('border-color:#e53935');
+    expect(pin.querySelector('img').getAttribute('src')).toBe(TEX);
+    const dot = $('#poi-list .dot');
+    expect(dot.className).toBe('dot dot-item');
+    expect(dot.getAttribute('style')).toBe('border-color:#e53935');
+    expect(dot.querySelector('img').getAttribute('src')).toBe(TEX);
+  });
+
+  test('icônes chargées seulement si un POI en utilise, échec silencieux', async () => {
+    let f = iconFetch();
+    await withData({ pois: [POI({ id: 'x' })] }, { fetch: f });
+    await flush();
+    expect(f).not.toHaveBeenCalled();
+    f = iconFetch({ fail: true });
+    const app = await withData({ pois: [POI({ id: 'x', icon: 'minecraft:diamond' })] }, { fetch: f });
+    await flush();
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(app.state.markers.get('x').getElement().querySelector('img')).toBeNull();
+    // Une modification relance le chargement.
+    app.store.savePoi({ ...app.store.getPoi('x'), name: 'y' });
+    expect(f).toHaveBeenCalledTimes(2);
+  });
+
+  test('popup : coordonnées, conversion, liens et actions', async () => {
+    const app = await withData({ pois });
+    app.state.markers.get('a').fire('click');
+    const p = popup();
+    expect(p.querySelector('.popup-title').textContent).toBe('Alpha');
+    expect(p.querySelector('.popup-coords').textContent).toBe('X 10Y 64Z 20');
+    expect(p.querySelector('.popup-coords .y').title).toBe('Hauteur (information)');
+    expect(p.querySelector('.popup-sub').textContent).toBe('≈ Nether : X 1, Z 2');
+    const linkBtns = p.querySelectorAll('.link-btn');
+    expect(linkBtns).toHaveLength(2);
+    expect(linkBtns[0].title).toBe('Aller à Beta');
+    expect(linkBtns[0].querySelector('.badge')).toBeNull();
+    expect(linkBtns[1].querySelector('.badge').textContent).toBe('Nether');
+    expect(linkBtns[1].querySelector('.badge').className).toBe('badge badge-nether');
+    expect(linkBtns[1].querySelector('.arrow').textContent).toBe('➜');
+    expect(button('Portail Nether', p).title).toBe('Créer un POI lié dans le Nether aux coordonnées converties');
+    const leafletPopup = app.map._popup;
+    expect(leafletPopup.options).toMatchObject({ offset: [0, -4], minWidth: 220, maxWidth: 320 });
+    expect(leafletPopup.getLatLng()).toEqual(ll(10, 20));
+  });
+
+  test('popup : sans lien, sans conversion dans l’End', async () => {
+    const app = await withData({ pois: [POI({ id: 'e', name: 'Fin', dim: 'end' })] }, { hash: '#end/0/0/0' });
+    app.state.markers.get('e').fire('click');
+    expect(popup().querySelector('.popup-sub')).toBeNull();
+    expect(popup().querySelector('.popup-links')).toBeNull();
+    expect(popup().textContent).not.toContain('Portail');
+  });
+
+  test('lien vers un autre POI : même vue, déplacement animé, saut lointain, autre dimension', async () => {
+    const app = await withData({ pois: [
+      POI({ id: 'a', name: 'A', links: ['b', 'c', 'd', 'n'] }),
+      POI({ id: 'b', name: 'Proche', x: 20, z: 20 }),
+      POI({ id: 'c', name: 'Moyen', x: 500, z: 0 }),
+      POI({ id: 'd', name: 'Loin', x: 50000, z: 0 }),
+      POI({ id: 'n', name: 'Nether', dim: 'nether', x: 7, z: 8 }),
+    ] });
+    const go = (name) => { app.state.markers.get('a').fire('click'); button(name, popup()).click(); };
+    app.map.setZoom(-1, { animate: false });
+    go('Proche');
+    expect(app.map.getCenter()).toEqual(L.latLng(0, 0));
+    expect(popup().querySelector('.popup-title').textContent).toBe('Proche');
+    const el = app.state.markers.get('b').getElement();
+    expect(el.classList.contains('pulse')).toBe(true);
+
+    app.map.setView(ll(0, 0), 0, { animate: false });
+    const moved = new Promise((r) => app.map.once('moveend', r));
+    const fly = vi.spyOn(app.map, 'flyTo');
+    go('Moyen');
+    expect(fly).toHaveBeenCalledWith(ll(500, 0), 0, { duration: 0.6 });
+    await moved;
+    expect(popup().querySelector('.popup-title').textContent).toBe('Moyen');
+
+    app.map.setView(ll(0, 0), -2, { animate: false });
+    go('Loin');
+    expect(app.map.getCenter()).toEqual(ll(50000, 0));
+    // Zoom jamais négatif après un saut.
+    expect(app.map.getZoom()).toBe(0);
+    expect(popup().querySelector('.popup-title').textContent).toBe('Loin');
+
+    app.map.setView(ll(0, 0), 0, { animate: false });
+    app.state.markers.get('a').fire('click');
+    app.map.setZoom(3, { animate: false });
+    button('Nether', popup()).click();
+    expect(app.state.dim).toBe('nether');
+    expect(app.map.getZoom()).toBe(3);
+    expect(app.map.getCenter()).toEqual(ll(7, 8));
+    expect(popup().querySelector('.popup-title').textContent).toBe('Nether');
+  });
+
+  test('lien vers un POI supprimé entre-temps, marqueur sans élément', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'A', links: ['b'] }), POI({ id: 'b', name: 'B' })] });
+    app.state.markers.get('a').fire('click');
+    const btn = button('B', popup());
+    app.store.data.pois = app.store.data.pois.filter((p) => p.id !== 'b');
+    btn.click();
+    expect(popup().querySelector('.popup-title').textContent).toBe('A');
+    app.state.markers.delete('a');
+    $('#poi-list .item').click();
+    expect(popup().querySelector('.popup-title').textContent).toBe('A');
+  });
+
+  test('actions de la popup : modifier, portail, copier, supprimer', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'Base', icon: 'minecraft:diamond', x: 80, y: 12, z: -16 })] });
+    app.state.markers.get('a').fire('click');
+    button('Modifier', popup()).click();
+    expect($('#poi-dialog').open).toBe(true);
+    expect($('#poi-dialog-title').textContent).toBe('Modifier le POI');
+    expect($('#poi-form').elements.label.value).toBe('Base');
+    $('#poi-dialog').close();
+
+    app.state.markers.get('a').fire('click');
+    button('Portail Nether', popup()).click();
+    const f = $('#poi-form').elements;
+    expect($('#poi-dialog-title').textContent).toBe('Nouveau POI');
+    expect([f.label.value, f.dim.value, f.x.value, f.y.value, f.z.value, f.icon.value])
+      .toEqual(['Base (Nether)', 'nether', '10', '12', '-2', 'minecraft:diamond']);
+    expect($('#poi-links input:checked').value).toBe('a');
+    $('#poi-dialog').close();
+
+    vi.stubGlobal('prompt', vi.fn());
+    app.state.markers.get('a').fire('click');
+    button('Copier', popup()).click();
+    expect(prompt).toHaveBeenCalledWith('Copier :', '80 12 -16');
+
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    button('Supprimer', popup()).click();
+    expect(confirm).toHaveBeenCalledWith('Supprimer le POI « Base » ?');
+    expect(app.store.data.pois).toHaveLength(1);
+    confirm.mockReturnValue(true);
+    button('Supprimer', popup()).click();
+    expect(app.store.data.pois).toHaveLength(0);
+    expect(popup()).toBeNull();
+  });
+
+  test('portail depuis le Nether vers l’Overworld', async () => {
+    const app = await withData({ pois: [POI({ id: 'n', name: 'N', dim: 'nether', x: 3, z: -1 })] }, { hash: '#nether/0/0/0' });
+    app.state.markers.get('n').fire('click');
+    const b = button('Portail Overworld', popup());
+    expect(b.title).toBe("Créer un POI lié dans l'Overworld aux coordonnées converties");
+    b.click();
+    expect($('#poi-form').elements.x.value).toBe('24');
+    expect($('#poi-form').elements.z.value).toBe('-8');
+  });
+});
+
+describe('copie', () => {
+  test('presse-papiers disponible : copie puis message', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', x: 1, y: 2, z: 3 })] });
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.stubGlobal('isSecureContext', true);
+    vi.stubGlobal('prompt', vi.fn());
+    app.state.markers.get('a').fire('click');
+    button('Copier', popup()).click();
+    await flush();
+    expect(writeText).toHaveBeenCalledWith('1 2 3');
+    expect(text('#toast')).toBe('Copié : 1 2 3');
+    expect($('#toast').hidden).toBe(false);
+    expect(prompt).not.toHaveBeenCalled();
+    writeText.mockRejectedValue(new Error('refus'));
+    button('Copier', popup()).click();
+    await flush();
+    expect(prompt).toHaveBeenCalledWith('Copier :', '1 2 3');
+  });
+
+  test('contexte non sécurisé : invite de copie', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn() } });
+    vi.stubGlobal('isSecureContext', false);
+    vi.stubGlobal('prompt', vi.fn());
+    app.state.markers.get('a').fire('click');
+    button('Copier', popup()).click();
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledWith('Copier :', '0 64 0');
+  });
+
+  test('le message disparaît après 2,2 s, minuterie relancée', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    vi.useFakeTimers();
+    vi.stubGlobal('navigator', { clipboard: { writeText: () => Promise.resolve() } });
+    vi.stubGlobal('isSecureContext', true);
+    app.state.markers.get('a').fire('click');
+    button('Copier', popup()).click();
+    await vi.advanceTimersByTimeAsync(2000);
+    button('Copier', popup()).click();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect($('#toast').hidden).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect($('#toast').hidden).toBe(true);
+  });
+});
+
+describe('listes du panneau', () => {
+  test('POI triés, filtrés, toutes dimensions, liens, vide', async () => {
+    const app = await withData({ pois: [
+      POI({ id: 'z', name: 'Zèbre', x: 1, y: 2, z: 3, links: ['e'] }),
+      POI({ id: 'e', name: 'Écurie' }),
+      POI({ id: 'n', name: 'Nid', dim: 'nether' }),
+    ] });
+    const names = () => $$('#poi-list .item-name').map((e) => e.textContent);
+    expect(names()).toEqual(['Écurie', 'Zèbre']);
+    expect($$('#poi-list .item')[1].querySelector('.item-sub').textContent).toBe('X 1 · Y 2 · Z 3');
+    expect($$('#poi-list .item')[1].querySelector('.item-links').textContent).toBe('🔗 1');
+    expect($$('#poi-list .item')[1].querySelector('.item-links').title).toBe('Liens');
+    expect($('#poi-list .badge')).toBeNull();
+    change($('#poi-all-dims'), true);
+    expect(names()).toEqual(['Écurie', 'Nid', 'Zèbre']);
+    expect($$('#poi-list .item')[1].querySelector('.badge').textContent).toBe('Nether');
+    expect($$('#poi-list .badge')).toHaveLength(1);
+    input($('#poi-search'), '  ZÈ ');
+    expect(names()).toEqual(['Zèbre']);
+    input($('#poi-search'), 'rien');
+    expect(text('#poi-list')).toBe('Aucun résultat.');
+    input($('#poi-search'), '');
+    app.store.replaceAll({});
+    expect(text('#poi-list')).toBe('Aucun POI. Clic droit sur la carte ou « + POI ».');
+    expect($('#poi-list li').className).toBe('empty');
+  });
+
+  test('un clic sur un POI d’une autre dimension y va', async () => {
+    const app = await withData({ pois: [POI({ id: 'n', name: 'Nid', dim: 'nether', x: 4, z: 4 })] }, { storage: { 'minecarte:options': { allDims: true } } });
+    $('#poi-list .item').click();
+    expect(app.state.dim).toBe('nether');
+    expect(popup().querySelector('.popup-title').textContent).toBe('Nid');
+  });
+
+  test('sur mobile, aller à un POI ferme le panneau', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] }, { width: 600 });
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    document.body.classList.remove('sidebar-hidden');
+    const inv = vi.spyOn(app.map, 'invalidateSize');
+    $('#poi-list .item').click();
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+    vi.advanceTimersByTime(219);
+    expect(inv).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(inv).toHaveBeenCalled();
+  });
+});
+
+describe('dialogue POI', () => {
+  test('nouveau POI au centre de la vue, couleurs, enregistrement', async () => {
+    const app = await withData({ pois: [POI({ id: 'o', name: 'Autre' })] });
+    app.map.setView(ll(40, -8), 1, { animate: false });
+    $('#add-poi').click();
+    const f = $('#poi-form').elements;
+    expect($('#poi-dialog-title').textContent).toBe('Nouveau POI');
+    expect([f.id.value, f.label.value, f.color.value, f.dim.value, f.x.value, f.y.value, f.z.value, f.icon.value])
+      .toEqual(['', '', '#e53935', 'overworld', '40', '64', '-8', '']);
+    expect($('#icon-picker').hidden).toBe(true);
+    expect(document.activeElement).toBe(f.label);
+    const sw = $$('#poi-form .swatches .swatch');
+    expect(sw).toHaveLength(Utils.SWATCHES.length);
+    expect(sw[2].title).toBe(Utils.SWATCHES[2]);
+    expect(sw[2].getAttribute('style')).toBe(`background:${Utils.SWATCHES[2]}`);
+    sw[2].click();
+    expect(f.color.value).toBe(Utils.SWATCHES[2]);
+    f.label.value = 'Maison';
+    f.z.value = '5';
+    $('#poi-links input').click();
+    submit($('#poi-form'));
+    expect($('#poi-dialog').open).toBe(false);
+    const saved = app.store.data.pois.find((p) => p.name === 'Maison');
+    expect(saved).toMatchObject({ color: Utils.SWATCHES[2], x: 40, y: 64, z: 5, links: ['o'], icon: '' });
+    expect(popup().querySelector('.popup-title').textContent).toBe('Maison');
+  });
+
+  test('modification : liens décochés, filtre, POI courant exclu', async () => {
+    const app = await withData({ pois: [
+      POI({ id: 'a', name: 'A', links: ['b'] }),
+      POI({ id: 'b', name: 'Bravo', x: 3, z: 4 }),
+      POI({ id: 'c', name: 'Charlie', dim: 'end' }),
+      POI({ id: 'd', name: 'Delta', dim: 'nether' }),
+      POI({ id: 'e', name: 'Écho', dim: 'nether' }),
+    ] });
+    app.state.markers.get('a').fire('click');
+    button('Modifier', popup()).click();
+    const names = () => $$('#poi-links .link-name').map((e) => e.textContent);
+    expect(names()).toEqual(['Bravo', 'Delta', 'Écho', 'Charlie']);
+    const first = $('#poi-links .link-option');
+    expect(first.querySelector('.item-sub').textContent).toBe('3, 4');
+    expect(first.querySelector('.badge').textContent).toBe('Overworld');
+    input($('#poi-link-filter'), ' CHAR ');
+    // Les POI cochés restent visibles.
+    expect(names()).toEqual(['Bravo', 'Charlie']);
+    $$('#poi-links input')[1].click();
+    $$('#poi-links input')[0].click();
+    input($('#poi-link-filter'), '');
+    expect($$('#poi-links input:checked').map((i) => i.value)).toEqual(['c']);
+    submit($('#poi-form'));
+    expect(app.store.getPoi('a').links).toEqual(['c']);
+  });
+
+  test('aucun autre POI', async () => {
+    await boot();
+    $('#add-poi').click();
+    expect(text('#poi-links')).toBe('Aucun autre POI pour le moment.');
+  });
+
+  test('fermeture par le bouton', async () => {
+    await boot();
+    $('#add-poi').click();
+    $('#poi-dialog [data-close]').click();
+    expect($('#poi-dialog').open).toBe(false);
+  });
+});
+
+describe('choix de l’icône', () => {
+  test('chargement, recherche, choix, retrait', async () => {
+    let resolve;
+    const f = vi.fn(() => new Promise((r) => { resolve = r; }));
+    await boot({ fetch: f });
+    $('#add-poi').click();
+    expect(text('#icon-current')).toBe('—Aucune (pastille de couleur)');
+    expect($('#icon-clear').hidden).toBe(true);
+    input($('#icon-search'), 'dia');
+    expect($('#icon-grid').children).toHaveLength(0);
+    $('#icon-choose').click();
+    expect($('#icon-picker').hidden).toBe(false);
+    expect(document.activeElement).toBe($('#icon-search'));
+    expect(text('#icon-grid')).toBe('Chargement des icônes…');
+    resolve(Response.json(MANIFEST));
+    await flush();
+    expect($$('#icon-grid .icon-cell')).toHaveLength(1);
+    const cell = $('#icon-grid .icon-cell');
+    expect(cell.title).toBe('Diamond (minecraft:diamond)');
+    expect(cell.className).toBe('icon-cell');
+    const img = cell.querySelector('img');
+    expect([img.getAttribute('src'), img.alt, img.getAttribute('loading')]).toEqual([TEX, 'Diamond', 'lazy']);
+    input($('#icon-search'), '');
+    expect($$('#icon-grid .icon-cell')).toHaveLength(2);
+    input($('#icon-search'), 'zzz');
+    expect(text('#icon-grid')).toBe('Aucun item trouvé (recherche en anglais : diamond, totem, bed…).');
+    input($('#icon-search'), 'diamond');
+    $('#icon-grid .icon-cell').click();
+    expect($('#poi-form').elements.icon.value).toBe('minecraft:diamond');
+    expect($('#icon-picker').hidden).toBe(true);
+    expect(text('#icon-current')).toBe('Diamond');
+    expect($('#icon-current img').getAttribute('src')).toBe(TEX);
+    expect($('#icon-clear').hidden).toBe(false);
+    // Réouverture : liste déjà chargée, item courant repéré.
+    $('#icon-choose').click();
+    expect($('#icon-grid .icon-cell').className).toBe('icon-cell selected');
+    $('#icon-choose').click();
+    expect($('#icon-picker').hidden).toBe(true);
+    $('#icon-clear').click();
+    expect($('#poi-form').elements.icon.value).toBe('');
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  test('échec du chargement', async () => {
+    await boot({ fetch: iconFetch({ fail: true }) });
+    $('#add-poi').click();
+    $('#icon-choose').click();
+    await flush();
+    expect(text('#icon-grid')).toBe('Impossible de charger les icônes (connexion internet requise).');
+  });
+
+  test('Entrée dans la recherche ne soumet pas le formulaire', async () => {
+    await boot();
+    expect(key('Enter', {}, $('#icon-search')).defaultPrevented).toBe(true);
+    expect(key('a', {}, $('#icon-search')).defaultPrevented).toBe(false);
+  });
+
+  test('icône inconnue : nom lisible sans image', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', icon: 'minecraft:old_thing' })] });
+    app.state.markers.get('a').fire('click');
+    button('Modifier', popup()).click();
+    expect(text('#icon-current')).toBe('—old thing');
+  });
+});
+
+const PATH = (o) => ({ name: 'Route', color: '#43a047', dim: 'overworld', weight: 4, points: [[0, 0], [30, 40]], ...o });
+const pathLines = (app) => layers(app, (l) => l instanceof L.Polyline && l.options.pane === 'pathPane' && l.options.interactive !== false);
+const vertices = (app) => layers(app, (l) => l instanceof L.Marker && l.options.draggable);
+const mouse = (x = 0, y = 0) => new MouseEvent('contextmenu', { clientX: x, clientY: y });
+
+describe('chemins', () => {
+  test('tracés de la dimension avec ombre et infobulle', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r', name: '<i>R</i>' }), PATH({ id: 'n', dim: 'nether' })] });
+    const lines = pathLines(app);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].options).toMatchObject({ color: '#43a047', weight: 4, opacity: 0.95 });
+    expect(lines[0].getLatLngs()).toEqual([ll(0, 0), ll(30, 40)]);
+    expect(lines[0].getTooltip().getContent()).toBe('&lt;i&gt;R&lt;/i&gt;');
+    expect(lines[0].getTooltip().options.sticky).toBe(true);
+    const shadow = layers(app, (l) => l instanceof L.Polyline && l.options.pane === 'pathPane' && l.options.interactive === false);
+    expect(shadow).toHaveLength(1);
+    expect(shadow[0].options).toMatchObject({ color: '#000', weight: 7, opacity: 0.35 });
+    expect(text('#path-list .item-name')).toBe('<i>R</i>');
+    expect(text('#path-list .item-sub')).toBe('50 blocs · 2 points');
+    expect($('#path-list .swatch-line').getAttribute('style')).toBe('background:#43a047');
+  });
+
+  test('liste vide', async () => {
+    await boot();
+    expect(text('#path-list')).toBe('Aucun chemin dans cette dimension. Clic droit sur la carte ou « + Tracer un chemin ».');
+    expect($('#path-list li').className).toBe('empty');
+  });
+
+  test('popup : longueur, équivalent Overworld dans le Nether, actions', async () => {
+    const app = await withData({ paths: [PATH({ id: 'n', dim: 'nether' })] }, { hash: '#nether/0/0/0' });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    const subs = [...popup().querySelectorAll('.popup-sub')].map((e) => e.textContent);
+    expect(subs).toEqual(['50 blocs · 2 points', "≈ 400 blocs dans l'Overworld"]);
+    expect(popup().querySelector('.popup-title').textContent).toBe('Route');
+    expect(app.map._popup.getLatLng()).toEqual(ll(3, 4));
+    expect(app.map._popup.options.minWidth).toBe(220);
+    button('Modifier', popup()).click();
+    expect(popup()).toBeNull();
+    const f = $('#path-form').elements;
+    expect([f.id.value, f.label.value, f.color.value, f.weight.value]).toEqual(['n', 'Route', '#43a047', '4']);
+    expect(text('#path-info')).toBe('Nether · 50 blocs · 2 points');
+    expect(text('#weight-value')).toBe('4 px');
+    expect($('#weight-preview').style.cssText).toBe('height: 4px; background: rgb(67, 160, 71);');
+    expect(document.activeElement).toBe(f.label);
+  });
+
+  test('popup dans l’Overworld : pas d’équivalent', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    expect(popup().querySelectorAll('.popup-sub')).toHaveLength(1);
+  });
+
+  test('dialogue : largeur, couleur, enregistrement', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Modifier', popup()).click();
+    const f = $('#path-form').elements;
+    input(f.weight, '9');
+    expect(text('#weight-value')).toBe('9 px');
+    input(f.color, '#000000');
+    expect($('#weight-preview').style.cssText).toBe('height: 9px; background: rgb(0, 0, 0);');
+    $('#path-form .swatch').click();
+    vi.runAllTimers();
+    expect($('#weight-preview').style.background).toBe(css(Utils.SWATCHES[0]));
+    f.label.value = 'Autoroute';
+    submit($('#path-form'));
+    expect($('#path-dialog').open).toBe(false);
+    expect(app.store.getPath('r')).toMatchObject({ name: 'Autoroute', color: Utils.SWATCHES[0], weight: 9 });
+  });
+
+  test('dialogue : chemin supprimé entre-temps', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Modifier', popup()).click();
+    app.store.deletePath('r');
+    submit($('#path-form'));
+    expect($('#path-dialog').open).toBe(false);
+    expect(app.store.data.paths).toEqual([]);
+  });
+
+  test('suppression avec confirmation', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Supprimer', popup()).click();
+    expect(confirm).toHaveBeenCalledWith('Supprimer le chemin « Route » ?');
+    expect(app.store.data.paths).toHaveLength(1);
+    confirm.mockReturnValue(true);
+    button('Supprimer', popup()).click();
+    expect(app.store.data.paths).toHaveLength(0);
+    expect(popup()).toBeNull();
+  });
+
+  test('aller à un chemin depuis la liste : cadrage et popup au point du milieu', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r', points: [[0, 0], [10, 0], [200, 0]] })] });
+    const fit = vi.spyOn(app.map, 'fitBounds');
+    $('#path-list .item').click();
+    expect(fit.mock.calls[0][0]).toEqual(L.latLngBounds([ll(0, 0), ll(200, 0)]).pad(0.2));
+    expect(fit.mock.calls[0][1]).toMatchObject({ maxZoom: 2, animate: false });
+    expect(app.map._popup.getLatLng()).toEqual(ll(10, 0));
+  });
+});
+
+describe('tracé d’un chemin', () => {
+  test('points au clic, accroche aux POI, doublons ignorés, aperçu, fin au double-clic', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', x: 50, z: 50 })], paths: [PATH({ id: 'r' })] });
+    $('#new-path').click();
+    expect(app.state.mode).toBe('draw');
+    expect(app.map.doubleClickZoom.enabled()).toBe(false);
+    expect(app.map.getContainer().classList.contains('drawing')).toBe(true);
+    expect($('#mode-banner').hidden).toBe(false);
+    expect($('#mode-undo').hidden).toBe(false);
+    expect(text('#mode-text')).toBe('Tracé — 0 point(s), 0 blocs. Clic : ajouter · clic sur un POI : s’y accrocher · double-clic / Entrée : terminer');
+    // Pas d'aperçu sans point.
+    app.map.fire('mousemove', { latlng: ll(5, 5) });
+    expect(app.state.draw.preview.getLatLngs()).toEqual([]);
+    app.map.fire('click', { latlng: ll(0, 0) });
+    app.map.fire('click', { latlng: L.latLng(-0.9, 0.1) });
+    app.state.markers.get('a').fire('click');
+    expect(app.state.draw.points).toEqual([[0, 0], [50, 50]]);
+    expect(popup()).toBeNull();
+    expect(text('#mode-text')).toContain('2 point(s), 71 blocs');
+    const vs = layers(app, (l) => l instanceof L.CircleMarker && l.options.fillColor === app.state.draw.color);
+    expect(vs).toHaveLength(2);
+    expect(vs[0].options).toMatchObject({ radius: 4, color: '#fff', weight: 2, fillOpacity: 1, interactive: false });
+    app.map.fire('mousemove', { latlng: ll(60, 60) });
+    expect(app.state.draw.preview.getLatLngs()).toEqual([ll(50, 50), ll(60, 60)]);
+    expect(app.state.draw.color).toBe(Utils.SWATCHES[1]);
+    app.map.fire('dblclick');
+    expect(app.state.mode).toBe(null);
+    expect(app.map.doubleClickZoom.enabled()).toBe(true);
+    expect(app.map.getContainer().classList.contains('drawing')).toBe(false);
+    expect($('#mode-banner').hidden).toBe(true);
+    const created = app.store.data.paths[1];
+    expect(created).toMatchObject({ name: 'Chemin 2', color: Utils.SWATCHES[1], dim: 'overworld', points: [[0, 0], [50, 50]], weight: 4 });
+    expect($('#path-dialog').open).toBe(true);
+    expect($('#path-form').elements.id.value).toBe(created.id);
+  });
+
+  test('moins de 2 points : refusé', async () => {
+    const app = await boot();
+    $('#new-path').click();
+    app.map.fire('click', { latlng: ll(0, 0) });
+    button('Terminer', $('#mode-banner')).click();
+    expect(text('#toast')).toBe('Un chemin doit avoir au moins 2 points.');
+    expect(app.state.mode).toBe('draw');
+  });
+
+  test('annuler le dernier point, abandonner', async () => {
+    const app = await boot();
+    $('#new-path').click();
+    app.map.fire('click', { latlng: ll(0, 0) });
+    app.map.fire('click', { latlng: ll(5, 0) });
+    app.map.fire('mousemove', { latlng: ll(9, 9) });
+    $('#mode-undo').click();
+    expect(app.state.draw.points).toEqual([[0, 0]]);
+    expect(app.state.draw.preview.getLatLngs()).toEqual([]);
+    $('#mode-cancel').click();
+    expect(app.state.mode).toBe(null);
+    expect(app.store.data.paths).toEqual([]);
+    // Hors tracé : rien.
+    $('#mode-undo').click();
+    $('#mode-cancel').click();
+    $('#mode-finish').click();
+    expect(app.state.mode).toBe(null);
+  });
+
+  test('prolonger un chemin existant', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r', color: '#8e24aa', weight: 7 })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Prolonger', popup()).click();
+    expect(app.state.draw.pathId).toBe('r');
+    expect(app.state.draw.line.options).toMatchObject({ color: '#8e24aa', weight: 7 });
+    expect(app.state.draw.preview.options).toMatchObject({ weight: 2, dashArray: '6 6' });
+    // Le chemin prolongé n'est plus dessiné à part.
+    expect(pathLines(app)).toHaveLength(0);
+    expect(text('#mode-text')).toContain('Tracé (prolongement) — 2 point(s)');
+    // Clics sur le tracé ignorés pendant le mode.
+    app.map.fire('click', { latlng: ll(30, 80) });
+    key('Enter');
+    expect(app.store.getPath('r').points).toEqual([[0, 0], [30, 40], [30, 80]]);
+    expect($('#path-dialog').open).toBe(false);
+  });
+
+  test('prolonger un chemin supprimé : nouveau tracé', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    const b = button('Prolonger', popup());
+    app.store.deletePath('r');
+    b.click();
+    expect(app.state.draw.pathId).toBe(null);
+    expect(app.state.draw.points).toEqual([]);
+    expect(app.state.draw.color).toBe(Utils.SWATCHES[0]);
+  });
+
+  test('pendant un mode : popups et menu désactivés', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })], paths: [PATH({ id: 'r' }), PATH({ id: 's' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Éditer le tracé', popup()).click();
+    const other = pathLines(app).find((l) => l !== app.state.edit.line);
+    other.fire('click', { latlng: ll(3, 4) });
+    app.state.markers.get('a').fire('click');
+    app.map.fire('contextmenu', { latlng: ll(0, 0), originalEvent: mouse() });
+    expect(popup()).toBeNull();
+    expect($('#context-menu').hidden).toBe(true);
+    app.map.fire('dblclick', { latlng: ll(0, 0), containerPoint: L.point(0, 0), originalEvent: new MouseEvent('dblclick') });
+    expect(app.state.mode).toBe('edit');
+  });
+
+  test('changer de dimension annule le tracé', async () => {
+    const app = await boot();
+    $('#new-path').click();
+    $('.dim-btn[data-dim="end"]').click();
+    expect(app.state.mode).toBe(null);
+  });
+
+  test('sur mobile, le panneau se ferme', async () => {
+    await boot({ width: 700 });
+    document.body.classList.remove('sidebar-hidden');
+    $('#new-path').click();
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+  });
+});
+
+describe('édition d’un tracé', () => {
+  const start = async (points = [[0, 0], [100, 0], [100, 100]]) => {
+    const app = await withData({ paths: [PATH({ id: 'r', weight: 3, points })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Éditer le tracé', popup()).click();
+    return app;
+  };
+
+  test('bandeau, sommets, ligne épaissie', async () => {
+    const app = await start();
+    expect(app.state.mode).toBe('edit');
+    expect(app.map.getContainer().classList.contains('editing')).toBe(true);
+    expect($('#mode-undo').hidden).toBe(true);
+    expect(text('#mode-text')).toBe('Édition de « Route » — 3 points, 200 blocs. Glisser : déplacer · clic sur un segment : insérer · clic droit sur un sommet : supprimer');
+    expect(app.state.edit.line.options.weight).toBe(6);
+    expect(vertices(app)).toHaveLength(3);
+    expect(vertices(app)[0].options).toMatchObject({ zIndexOffset: 1000 });
+    expect(vertices(app)[0].options.icon.options).toMatchObject({ className: 'vertex-icon', iconSize: [12, 12] });
+  });
+
+  test('ligne épaisse : +2', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r', weight: 8 })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Éditer le tracé', popup()).click();
+    expect(app.state.edit.line.options.weight).toBe(10);
+  });
+
+  test('glisser un sommet, insérer, supprimer, terminer', async () => {
+    const app = await start();
+    const v = vertices(app)[1];
+    v.setLatLng(ll(90, 10));
+    v.fire('drag');
+    expect(app.state.edit.points[1]).toEqual([90, 10]);
+    expect(app.state.edit.line.getLatLngs()[1]).toEqual(ll(90, 10));
+    expect(text('#coords')).toContain('X 90  Z 10');
+    v.fire('dragend');
+    expect(text('#mode-text')).toContain('3 points');
+    const stopped = new MouseEvent('click');
+    app.state.edit.line.fire('click', { latlng: ll(95, 60), originalEvent: stopped });
+    expect(app.state.edit.points).toEqual([[0, 0], [90, 10], [95, 60], [100, 100]]);
+    expect(vertices(app)).toHaveLength(4);
+    vertices(app)[0].fire('contextmenu', { originalEvent: mouse() });
+    expect(app.state.edit.points).toEqual([[90, 10], [95, 60], [100, 100]]);
+    key('Enter');
+    expect(app.state.mode).toBe(null);
+    expect(app.store.getPath('r').points).toEqual([[90, 10], [95, 60], [100, 100]]);
+    expect(pathLines(app)).toHaveLength(1);
+  });
+
+  test('insertion sur le premier segment', async () => {
+    const app = await start();
+    app.state.edit.line.fire('click', { latlng: ll(50, 1), originalEvent: new MouseEvent('click') });
+    expect(app.state.edit.points[1]).toEqual([50, 1]);
+  });
+
+  test('au moins 2 points gardés', async () => {
+    const app = await start([[0, 0], [10, 0]]);
+    vertices(app)[0].fire('contextmenu', { originalEvent: mouse() });
+    expect(text('#toast')).toBe('Un chemin doit garder au moins 2 points.');
+    expect(app.state.edit.points).toHaveLength(2);
+  });
+
+  test('chemin supprimé pendant l’édition', async () => {
+    const app = await start();
+    app.store.deletePath('r');
+    $('#mode-finish').click();
+    expect(app.state.mode).toBe(null);
+    expect(app.store.data.paths).toEqual([]);
+  });
+
+  test('éditer un chemin disparu : rien', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    const b = button('Éditer le tracé', popup());
+    app.store.deletePath('r');
+    b.click();
+    expect(app.state.mode).toBe(null);
+  });
+});
+
+describe('menu contextuel', () => {
+  test('actions : POI, chemin, copie, centrer', async () => {
+    const app = await boot();
+    const open = () => app.map.fire('contextmenu', { latlng: ll(12, -7), originalEvent: mouse(100, 50) });
+    open();
+    const menu = $('#context-menu');
+    expect(menu.hidden).toBe(false);
+    expect(text('.menu-title')).toBe('X 12 · Z -7');
+    expect([menu.style.left, menu.style.top]).toEqual(['100px', '50px']);
+    button('Ajouter un POI', menu).click();
+    expect(menu.hidden).toBe(true);
+    expect($('#poi-form').elements.x.value).toBe('12');
+    expect($('#poi-form').elements.z.value).toBe('-7');
+    $('#poi-dialog').close();
+    open();
+    button('Commencer un chemin', menu).click();
+    expect(app.state.draw.points).toEqual([[12, -7]]);
+    $('#mode-cancel').click();
+    vi.stubGlobal('prompt', vi.fn());
+    open();
+    button('Copier', menu).click();
+    expect(prompt).toHaveBeenCalledWith('Copier :', '12 ~ -7');
+    open();
+    const pan = vi.spyOn(app.map, 'panTo');
+    button('Centrer', menu).click();
+    expect(pan).toHaveBeenCalledWith(ll(12, -7));
+  });
+
+  test('position gardée dans la fenêtre', async () => {
+    const app = await boot();
+    const menu = $('#context-menu');
+    Object.defineProperty(menu, 'offsetWidth', { value: 200 });
+    Object.defineProperty(menu, 'offsetHeight', { value: 100 });
+    window.innerHeight = 700;
+    app.map.fire('contextmenu', { latlng: ll(0, 0), originalEvent: mouse(1200, 690) });
+    expect([menu.style.left, menu.style.top]).toEqual(['1076px', '596px']);
+    app.map.fire('contextmenu', { latlng: ll(0, 0), originalEvent: mouse(-50, 1) });
+    expect([menu.style.left, menu.style.top]).toEqual(['4px', '4px']);
+  });
+
+  test('fermeture : clic ailleurs, clic sur la carte, déplacement, Échap', async () => {
+    const app = await boot();
+    const open = () => app.map.fire('contextmenu', { latlng: ll(0, 0), originalEvent: mouse() });
+    const menu = $('#context-menu');
+    open();
+    menu.querySelector('.menu-title').click();
+    expect(menu.hidden).toBe(false);
+    $('#sidebar').click();
+    expect(menu.hidden).toBe(true);
+    open();
+    app.map.fire('click', { latlng: ll(0, 0) });
+    expect(menu.hidden).toBe(true);
+    open();
+    app.map.fire('movestart');
+    expect(menu.hidden).toBe(true);
+    open();
+    app.map.fire('zoomstart');
+    expect(menu.hidden).toBe(true);
+    open();
+    key('Escape');
+    expect(menu.hidden).toBe(true);
+  });
+});
+
+describe('clavier', () => {
+  test('raccourcis du tracé', async () => {
+    const app = await boot();
+    $('#new-path').click();
+    for (const [x, z] of [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]]) app.map.fire('click', { latlng: ll(x, z) });
+    expect(key('Backspace').defaultPrevented).toBe(true);
+    key('z', { ctrlKey: true });
+    key('z', { metaKey: true });
+    expect(app.state.draw.points).toEqual([[0, 0], [1, 0]]);
+    expect(key('z').defaultPrevented).toBe(false);
+    expect(key('x', { ctrlKey: true }).defaultPrevented).toBe(false);
+    // En saisie : ignoré, sauf Échap.
+    key('Backspace', {}, $('#poi-search'));
+    key('Enter', {}, $('#poi-search'));
+    expect(app.state.draw.points).toHaveLength(2);
+    key('Escape', {}, $('#poi-search'));
+    expect(app.state.mode).toBe(null);
+  });
+
+  test('sans mode : Entrée et Retour arrière ne font rien', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    expect(key('Enter').defaultPrevented).toBe(false);
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Éditer le tracé', popup()).click();
+    expect(key('Backspace').defaultPrevented).toBe(false);
+    expect(app.state.mode).toBe('edit');
+  });
+
+  test('dialogue ouvert : raccourcis inactifs', async () => {
+    const app = await boot();
+    $('#new-path').click();
+    $('#poi-dialog').showModal();
+    key('Escape');
+    expect(app.state.mode).toBe('draw');
+    $('#poi-dialog').close();
+    key('Escape');
+    expect(app.state.mode).toBe(null);
+  });
+});
+
+describe('recherche de coordonnées', () => {
+  const go = (x, z, y = '') => {
+    const f = $('#goto').elements;
+    f.x.value = x; f.y.value = y; f.z.value = z;
+    submit($('#goto'));
+  };
+
+  test('valeurs arrondies, champ vide = 0 (les champs requis l’empêchent)', async () => {
+    await boot();
+    go('1e400', '2.6');
+    expect(popup().querySelector('.popup-title').textContent).toBe('📌 X 0 · Z 3');
+  });
+
+  test('emplacement avec hauteur : repère, conversion, POI', async () => {
+    const app = await withData({ pois: [] });
+    app.map.setZoom(3, { animate: false });
+    go('80.4', '-16', '70');
+    expect(app.map.getZoom()).toBe(3);
+    expect(app.map.getCenter()).toEqual(ll(80, -16));
+    expect(popup().querySelector('.popup-title').textContent).toBe('📌 X 80 · Y 70 · Z -16');
+    expect(popup().querySelector('.popup-sub').textContent).toBe('≈ Nether : X 10, Z -2');
+    expect(popup().querySelector('select')).toBeNull();
+    expect(app.map._popup.options).toMatchObject({ minWidth: 230, offset: [0, -4] });
+    const marker = layers(app, (l) => l instanceof L.CircleMarker);
+    expect(marker).toHaveLength(1);
+    expect(marker[0].options).toMatchObject({ radius: 7, color: '#fff', weight: 2, fillColor: '#000', fillOpacity: 0.4, interactive: false });
+    vi.stubGlobal('prompt', vi.fn());
+    button('Copier', popup()).click();
+    expect(prompt).toHaveBeenCalledWith('Copier :', '80 70 -16');
+    const b = button('Créer un POI', popup());
+    expect(b.className).toBe('primary');
+    b.click();
+    expect(popup()).toBeNull();
+    expect(layers(app, (l) => l instanceof L.CircleMarker)).toHaveLength(0);
+    const f = $('#poi-form').elements;
+    expect([f.x.value, f.y.value, f.z.value]).toEqual(['80', '70', '-16']);
+  });
+
+  test('sans hauteur, zoom minimal 1, dans l’End', async () => {
+    const app = await boot({ hash: '#end/0/0/-2' });
+    go('3', '4');
+    expect(app.map.getZoom()).toBe(1);
+    expect(popup().querySelector('.popup-title').textContent).toBe('📌 X 3 · Z 4');
+    expect(popup().querySelector('.popup-sub')).toBeNull();
+    vi.stubGlobal('prompt', vi.fn());
+    button('Copier', popup()).click();
+    expect(prompt).toHaveBeenCalledWith('Copier :', '3 ~ 4');
+    button('Créer un POI', popup()).click();
+    expect($('#poi-form').elements.y.value).toBe('64');
+  });
+
+  test('commencer un chemin, ajouter au tracé en cours', async () => {
+    const app = await boot();
+    go('3', '4');
+    button('Commencer un chemin', popup()).click();
+    expect(app.state.draw.points).toEqual([[3, 4]]);
+    go('9', '4');
+    expect(popup().querySelectorAll('.popup-actions')[0].textContent).toBe('➕ Ajouter au tracé en cours');
+    button('Ajouter au tracé', popup()).click();
+    expect(popup()).toBeNull();
+    expect(app.state.draw.points).toEqual([[3, 4], [9, 4]]);
+  });
+
+  test('pendant l’édition : seulement la copie', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Éditer le tracé', popup()).click();
+    go('1', '1');
+    expect(popup().querySelectorAll('.popup-actions')).toHaveLength(1);
+    expect(popup().querySelector('select')).toBeNull();
+  });
+
+  test('ajouter au bout d’un chemin', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' }), PATH({ id: 's', name: 'Sentier' }), PATH({ id: 'n', dim: 'nether' })] });
+    go('7', '8');
+    const select = popup().querySelector('select');
+    expect(select.className).toBe('append-path');
+    expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([['', 'Ajouter au bout d’un chemin…'], ['r', 'Route'], ['s', 'Sentier']]);
+    change(select, '');
+    expect(popup()).not.toBeNull();
+    change(select, 's');
+    expect(popup()).toBeNull();
+    expect(app.store.getPath('s').points).toEqual([[0, 0], [30, 40], [7, 8]]);
+    expect(text('#toast')).toBe('Point ajouté à « Sentier ».');
+  });
+});
+
+describe('panneau latéral', () => {
+  test('masquer / afficher, onglets', async () => {
+    const app = await boot();
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const inv = vi.spyOn(app.map, 'invalidateSize');
+    $('#toggle-sidebar').click();
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+    vi.advanceTimersByTime(220);
+    expect(inv).toHaveBeenCalledTimes(1);
+    $('#toggle-sidebar').click();
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(false);
+    const tabs = $$('.tab');
+    tabs[1].click();
+    expect(tabs.map((t) => t.classList.contains('active'))).toEqual(tabs.map((t, i) => i === 1));
+    const active = $$('.panel').filter((p) => p.classList.contains('active'));
+    expect(active.map((p) => p.dataset.panel)).toEqual([tabs[1].dataset.tab]);
+  });
+});
+
+const setFiles = (el, files) => {
+  Object.defineProperty(el, 'files', { configurable: true, value: files });
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+};
+
+describe('export, import, effacement', () => {
+  test('export JSON', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    const clicked = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() { clicked.push([this.href, this.download, this.isConnected]); });
+    $('#export').click();
+    const [url, blob] = app.urls.created.at(-1);
+    expect(clicked).toEqual([[url, 'minecarte.json', true]]);
+    expect(blob.type).toBe('application/json');
+    expect(JSON.parse(await blob.text())).toEqual(JSON.parse(app.store.exportJson()));
+    expect(document.querySelector(`a[href="${url}"]`)).toBeNull();
+    vi.advanceTimersByTime(999);
+    expect(app.urls.revoked).not.toContain(url);
+    vi.advanceTimersByTime(1);
+    expect(app.urls.revoked).toContain(url);
+  });
+
+  test('import : fichier valide, refusé, invalide, absent', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    const clicked = vi.spyOn($('#import-file'), 'click').mockImplementation(() => {});
+    $('#import').click();
+    expect(clicked).toHaveBeenCalled();
+    const file = (content) => ({ text: async () => content });
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    vi.stubGlobal('alert', vi.fn());
+    setFiles($('#import-file'), [file(JSON.stringify(DATA({ pois: [POI({ id: 'x' }), POI({ id: 'y' })], paths: [PATH({})] })))]);
+    await flush();
+    expect(confirm).toHaveBeenCalledWith('Remplacer toutes les données actuelles par celles du fichier ?');
+    expect(app.store.data.pois.map((p) => p.id)).toEqual(['a']);
+    confirm.mockReturnValue(true);
+    $('#new-path').click();
+    setFiles($('#import-file'), [file(JSON.stringify(DATA({ pois: [POI({ id: 'x' }), POI({ id: 'y' })], paths: [PATH({})] })))]);
+    await flush();
+    expect(app.state.mode).toBe(null);
+    expect(app.store.data.pois.map((p) => p.id)).toEqual(['x', 'y']);
+    expect(text('#toast')).toBe('2 POI et 1 chemins importés.');
+    expect($('#import-file').value).toBe('');
+    setFiles($('#import-file'), [file('{oups')]);
+    await flush();
+    expect(alert.mock.calls[0][0]).toMatch(/^Fichier invalide : /);
+    setFiles($('#import-file'), []);
+    await flush();
+    expect(alert).toHaveBeenCalledTimes(1);
+  });
+
+  test('tout effacer : graine gardée, avertissement cloud', async () => {
+    const app = await withData({ seed: 'graine', pois: [POI({ id: 'a' })] });
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    $('#reset').click();
+    expect(confirm).toHaveBeenCalledWith('Effacer tous les POI, chemins et fonds importés ? Cette action est irréversible (pensez à exporter).');
+    expect(app.store.data.pois).toHaveLength(1);
+    confirm.mockReturnValue(true);
+    $('#new-path').click();
+    $('#reset').click();
+    expect(app.state.mode).toBe(null);
+    expect(app.store.data).toMatchObject({ seed: 'graine', pois: [], paths: [], backgrounds: [] });
+    app.cloud.state = { code: 'ABCDEFGH', version: 0, base: null };
+    $('#reset').click();
+    expect(confirm.mock.calls.at(-1)[0]).toContain(' Les données seront aussi effacées du cloud et des appareils reliés.');
+  });
+});
+
+// Blob de Node : fake-indexeddb le clone correctement (celui de jsdom perd ses méthodes).
+const png = (bytes = [1, 2, 3], type = 'image/png') => new NodeBlob([new Uint8Array(bytes)], { type });
+const sha = (bytes = [1, 2, 3]) => createHash('sha256').update(Buffer.from(bytes)).digest('hex');
+const BG = (o) => ({ id: 'g', name: 'Base', dim: 'overworld', x: 0, z: 0, width: 10, height: 20, scale: 2, opacity: 0.5, visible: true, hash: sha(), type: 'image/png', ...o });
+const overlays = (app) => layers(app, (l) => l instanceof L.ImageOverlay);
+const until = async (fn) => { for (let i = 0; i < 100 && !fn(); i++) await tick(); expect(fn()).toBeTruthy(); };
+
+describe('fonds importés', () => {
+  test('image locale : superposition, emprise, opacité, liste', async () => {
+    const app = await boot();
+    await Backgrounds.putBlob(sha(), png());
+    app.store.saveBackground(BG({ x: -4, z: 6 }));
+    expect(text('#bg-list .bg-status')).toBe('Chargement de l’image…');
+    await until(() => overlays(app).length);
+    const [o] = overlays(app);
+    expect(o.getBounds()).toEqual(L.latLngBounds([-6, -4], [-46, 16]));
+    expect(o.options).toMatchObject({ opacity: 0.5, pane: 'imagePane', className: 'bg-image', interactive: false });
+    expect(o._url).toBe(app.urls.created.at(-1)[0]);
+    expect($('#bg-list .bg-status')).toBeNull();
+    const subs = $$('#bg-list .item-sub').map((e) => e.textContent);
+    expect(subs).toEqual(['Overworld · X -4, Z 6', '10×20 px · 1 px = 2 blocs']);
+    expect(text('#bg-list .item-name')).toBe('Base');
+  });
+
+  test('masquer, autre dimension, déplacer, supprimer (URL libérée)', async () => {
+    const app = await boot();
+    await Backgrounds.putBlob(sha(), png());
+    app.store.saveBackground(BG());
+    await until(() => overlays(app).length);
+    const url = app.urls.created.at(-1)[0];
+    change($('#bg-list input[type="checkbox"]'), false);
+    expect(app.store.getBackground('g').visible).toBe(false);
+    expect(overlays(app)).toHaveLength(0);
+    change($('#bg-list input[type="checkbox"]'), true);
+    expect(overlays(app)).toHaveLength(1);
+    $('.dim-btn[data-dim="end"]').click();
+    expect(overlays(app)).toHaveLength(0);
+    $('.dim-btn[data-dim="overworld"]').click();
+    const [o] = overlays(app);
+    app.store.saveBackground({ ...app.store.getBackground('g'), x: 100, opacity: 1 });
+    expect(overlays(app)).toEqual([o]);
+    expect(o.getBounds().getWest()).toBe(100);
+    expect(o.options.opacity).toBe(1);
+    app.store.deleteBackground('g');
+    expect(overlays(app)).toHaveLength(0);
+    expect(app.urls.revoked).toContain(url);
+    expect(text('#bg-list')).toBe('Aucun fond importé.');
+  });
+
+  test('nouvelle image pour un fond : superposition remplacée', async () => {
+    const app = await boot();
+    await Backgrounds.putBlob(sha(), png());
+    await Backgrounds.putBlob(sha([9]), png([9]));
+    app.store.saveBackground(BG());
+    await until(() => overlays(app).length);
+    const [first] = overlays(app);
+    app.store.saveBackground(BG({ hash: sha([9]) }));
+    await until(() => overlays(app).length && overlays(app)[0] !== first);
+    expect(overlays(app)).toHaveLength(1);
+  });
+
+  test('image absente : avertissement, nouvel essai après 30 s', async () => {
+    const app = await boot();
+    const get = vi.spyOn(Backgrounds, 'getBlob');
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    app.store.saveBackground(BG());
+    await until(() => text('#bg-list').includes('⚠'));
+    expect(text('#bg-list .bg-status')).toBe('⚠ Image indisponible sur cet appareil');
+    expect(get).toHaveBeenCalledTimes(1);
+    now.mockReturnValue(31000);
+    app.store.saveBackground(BG({ name: 'B' }));
+    await flush();
+    expect(get).toHaveBeenCalledTimes(1);
+    now.mockReturnValue(31001);
+    await Backgrounds.putBlob(sha(), png());
+    app.store.saveBackground(BG({ name: 'C' }));
+    await until(() => overlays(app).length);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  test('stockage en erreur : image indisponible', async () => {
+    const app = await boot();
+    vi.spyOn(Backgrounds, 'getBlob').mockRejectedValue(new Error('IDB'));
+    app.store.saveBackground(BG());
+    await until(() => text('#bg-list').includes('⚠'));
+  });
+
+  test('nettoyage des images 3 s après la dernière modification', async () => {
+    const app = await boot();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const prune = vi.spyOn(Backgrounds, 'prune').mockRejectedValue(new Error('IDB'));
+    app.store.saveBackground(BG());
+    vi.advanceTimersByTime(2999);
+    app.store.saveBackground(BG({ id: 'h', hash: sha([7]) }));
+    vi.advanceTimersByTime(2999);
+    expect(prune).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(prune).toHaveBeenCalledTimes(1);
+    expect([...prune.mock.calls[0][0]].sort()).toEqual([sha(), sha([7])].sort());
+  });
+
+  test('liste triée, aller à un fond, modifier, supprimer', async () => {
+    const app = await boot();
+    app.store.saveBackground(BG({ id: 'e', name: 'Zone End', dim: 'end', scale: 0.25 }));
+    app.store.saveBackground(BG({ id: 'b', name: 'Bourg', scale: 8 }));
+    app.store.saveBackground(BG({ id: 'a', name: 'Abri', scale: 0.5 }));
+    app.store.saveBackground(BG({ id: 'n', name: 'Nid', dim: 'nether', scale: 4 }));
+    expect($$('#bg-list .item-name').map((e) => e.textContent)).toEqual(['Abri', 'Bourg', 'Nid', 'Zone End']);
+    expect($$('#bg-list .item-sub:not(.bg-status)').filter((_, i) => i % 2).map((e) => e.textContent.split(' · ')[1]))
+      .toEqual(['2 px par bloc', '1 px = 8 blocs', '1 px = 4 blocs', '4 px par bloc']);
+    const fit = vi.spyOn(app.map, 'fitBounds');
+    $$('#bg-list .item-main')[3].click();
+    expect(app.state.dim).toBe('end');
+    expect(fit.mock.calls[0][0]).toEqual(L.latLngBounds([-0, 0], [-5, 2.5]));
+    expect(fit.mock.calls[0][1]).toMatchObject({ animate: false });
+    $$('#bg-list .item-main')[0].click();
+    expect(app.state.dim).toBe('overworld');
+
+    const edit = $$('#bg-list .item')[1].querySelector('button[title="Modifier"]');
+    expect(edit.textContent).toBe('✎');
+    edit.click();
+    const f = $('#bg-form').elements;
+    expect($('#bg-dialog').open).toBe(true);
+    expect(text('#bg-dialog-title')).toBe('Modifier le fond');
+    expect([f.id.value, f.label.value, f.dim.value, f.x.value, f.z.value, f.scale.value, f.opacity.value, f.file.required])
+      .toEqual(['b', 'Bourg', 'overworld', '0', '0', '8', '50', false]);
+    expect(text('#bg-info')).toBe('Image de 10×20 px : couvre X 0 → 80, Z 0 → 160.');
+    $('#bg-dialog').close();
+
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    const del = $$('#bg-list .item')[1].querySelector('button[title="Supprimer"]');
+    expect(del.textContent).toBe('🗑');
+    expect(del.className).toBe('icon-btn danger');
+    del.click();
+    expect(confirm).toHaveBeenCalledWith('Supprimer le fond « Bourg » ?');
+    expect(app.store.getBackground('b')).toBeTruthy();
+    confirm.mockReturnValue(true);
+    app.cloud.state = { code: 'ABCDEFGH', version: 0, base: null };
+    $$('#bg-list .item')[1].querySelector('button[title="Supprimer"]').click();
+    expect(confirm.mock.calls[1][0]).toBe('Supprimer le fond « Bourg » (aussi dans le cloud et sur les appareils reliés) ?');
+    expect(app.store.getBackground('b')).toBeUndefined();
+  });
+});
+
+describe('dialogue d’import de fond', () => {
+  const file = (name = 'carte.png', bytes = [1, 2, 3]) => Object.assign(png(bytes), { name });
+
+  test('nouveau fond : taille lue, nom proposé, centrage, enregistrement', async () => {
+    const app = await boot();
+    app.map.setView(ll(1000, 500), 0, { animate: false });
+    vi.spyOn(Backgrounds, 'imageSize').mockResolvedValue({ width: 100, height: 50 });
+    $('#bg-add').click();
+    const f = $('#bg-form').elements;
+    expect(text('#bg-dialog-title')).toBe('Importer un fond de carte');
+    expect(f.file.required).toBe(true);
+    expect([f.id.value, f.label.value, f.dim.value, f.x.value, f.z.value, f.scale.value, f.opacity.value])
+      .toEqual(['', '', 'overworld', '1000', '500', '1', '100']);
+    expect(text('#bg-info')).toBe('Choisis une image pour voir la zone couverte.');
+    $('#bg-center').click();
+    expect(text('#toast')).toBe('Choisis d’abord une image.');
+    setFiles(f.file, []);
+    setFiles(f.file, [file('uNmINeD.export.png')]);
+    await flush();
+    expect(f.label.value).toBe('uNmINeD.export');
+    expect(text('#bg-info')).toBe('Image de 100×50 px : couvre X 1000 → 1100, Z 500 → 550.');
+    change(f.scale, '2');
+    input(f.scale, '2');
+    expect(text('#bg-info')).toBe('Image de 100×50 px : couvre X 1000 → 1200, Z 500 → 600.');
+    $('#bg-center').click();
+    expect([f.x.value, f.z.value]).toEqual(['900', '450']);
+    input(f.x, '-10');
+    expect(text('#bg-info')).toBe('Image de 100×50 px : couvre X -10 → 190, Z 450 → 550.');
+    input(f.z, '7');
+    expect(text('#bg-info')).toContain('Z 7 → 107.');
+    f.label.value = '  ';
+    f.opacity.value = '40';
+    app.map.setView(ll(0, 0), 3, { animate: false });
+    const fit = vi.spyOn(app.map, 'fitBounds');
+    vi.spyOn(Date, 'now').mockReturnValue(36 ** 3);
+    submit($('#bg-form'));
+    await until(() => !$('#bg-dialog').open);
+    expect(app.store.data.backgrounds).toEqual([{
+      id: 'bg-1000', name: 'Fond', dim: 'overworld', x: -10, z: 7, scale: 2, opacity: 0.4,
+      width: 100, height: 50, visible: true, hash: sha(), type: 'image/png',
+    }]);
+    expect(await Backgrounds.getBlob(sha())).toBeTruthy();
+    expect(fit).toHaveBeenCalled();
+  });
+
+  test('un nom déjà saisi est gardé, image illisible', async () => {
+    await boot();
+    const size = vi.spyOn(Backgrounds, 'imageSize').mockResolvedValue({ width: 1, height: 1 });
+    $('#bg-add').click();
+    const f = $('#bg-form').elements;
+    f.label.value = 'Mon nom';
+    setFiles(f.file, [file()]);
+    await flush();
+    expect(f.label.value).toBe('Mon nom');
+    size.mockRejectedValue(new Error('illisible'));
+    setFiles(f.file, [file()]);
+    await flush();
+    expect(text('#toast')).toBe('Image illisible.');
+    expect(text('#bg-info')).toBe('Choisis une image pour voir la zone couverte.');
+  });
+
+  test('modifier sans nouvelle image : image et visibilité gardées, pas de recentrage', async () => {
+    const app = await boot();
+    app.store.saveBackground(BG({ visible: false, type: 'image/webp' }));
+    $('#bg-list button[title="Modifier"]').click();
+    const f = $('#bg-form').elements;
+    f.label.value = ' Nouveau ';
+    f.x.value = '';
+    f.z.value = '3.6';
+    const fit = vi.spyOn(app.map, 'fitBounds');
+    submit($('#bg-form'));
+    await until(() => !$('#bg-dialog').open);
+    expect(app.store.getBackground('g')).toMatchObject({ name: 'Nouveau', x: 0, z: 4, visible: false, hash: sha(), type: 'image/webp', width: 10, height: 20 });
+    expect(fit).not.toHaveBeenCalled();
+  });
+
+  test('modifier avec une nouvelle image', async () => {
+    const app = await boot();
+    vi.spyOn(Backgrounds, 'imageSize').mockResolvedValue({ width: 64, height: 32 });
+    app.store.saveBackground(BG());
+    $('#bg-list button[title="Modifier"]').click();
+    const f = $('#bg-form').elements;
+    Object.defineProperty(f.file, 'files', { configurable: true, value: [file('b.jpg', [5])] });
+    submit($('#bg-form'));
+    await until(() => !$('#bg-dialog').open);
+    expect(app.store.getBackground('g')).toMatchObject({ hash: sha([5]), width: 64, height: 32 });
+  });
+
+  test('sans image ni fond existant : rien ; erreurs signalées', async () => {
+    const app = await boot();
+    vi.stubGlobal('alert', vi.fn());
+    $('#bg-add').click();
+    submit($('#bg-form'));
+    await flush();
+    expect($('#bg-dialog').open).toBe(true);
+    const f = $('#bg-form').elements;
+    Object.defineProperty(f.file, 'files', { configurable: true, value: [file()] });
+    vi.spyOn(Backgrounds, 'imageSize').mockRejectedValueOnce(new Error('Image illisible')).mockRejectedValueOnce('brut');
+    submit($('#bg-form'));
+    await flush();
+    expect(alert).toHaveBeenCalledWith("Impossible d'enregistrer le fond : Image illisible");
+    submit($('#bg-form'));
+    await flush();
+    expect(alert).toHaveBeenCalledWith("Impossible d'enregistrer le fond : brut");
+    expect(app.store.data.backgrounds).toEqual([]);
+  });
+});
+
+describe('reprise des anciens fonds', () => {
+  async function legacyDb(entries) {
+    const idb = new IDBFactory();
+    await new Promise((resolve, reject) => {
+      const req = idb.open('minecarte', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('backgrounds', { keyPath: 'id' });
+      req.onsuccess = () => {
+        const tx = req.result.transaction('backgrounds', 'readwrite');
+        entries.forEach((e) => tx.objectStore('backgrounds').put(e));
+        tx.oncomplete = () => { req.result.close(); resolve(); };
+      };
+      req.onerror = () => reject(req.error);
+    });
+    return idb;
+  }
+
+  test('fonds repris dans les données, ceux déjà présents gardés', async () => {
+    const meta = BG();
+    delete meta.hash;
+    delete meta.type;
+    const idb = await legacyDb([{ ...meta, id: 'old', name: 'Ancien', blob: png() }, { ...meta, id: 'g', name: 'Doublon', blob: png([4]) }]);
+    const app = await boot({ idb, storage: { 'minecarte:data': DATA({ backgrounds: [BG({ name: 'Déjà là' })] }) } });
+    await until(() => app.store.getBackground('old'));
+    expect(app.store.getBackground('old')).toMatchObject({ name: 'Ancien', hash: sha(), type: 'image/png' });
+    expect(app.store.getBackground('g').name).toBe('Déjà là');
+  });
+
+  test('stockage indisponible : import désactivé', async () => {
+    const idb = { open() { const req = {}; setTimeout(() => { req.error = new Error('bloqué'); req.onerror(); }); return req; } };
+    await boot({ idb });
+    await until(() => $('#bg-add').disabled);
+    expect($('#bg-add').title).toBe('Stockage local indisponible dans ce navigateur');
+  });
+});
+
+describe('synchronisation cloud', () => {
+  const URL_ = 'https://sync.test';
+  const start = async (extra = {}) => {
+    const server = createServer();
+    const app = await boot({ syncUrl: URL_, fetch: server.fetch, ...extra });
+    return { app, server };
+  };
+
+  test('section visible, création d’un code', async () => {
+    const { app } = await start();
+    expect($('#sync-section').hidden).toBe(false);
+    expect($('#sync-off').hidden).toBe(false);
+    expect($('#sync-on').hidden).toBe(true);
+    expect($('#sync-badge').hidden).toBe(true);
+    expect(text('#sync-status')).toBe('');
+    expect($('#sync-status').dataset.kind).toBe('off');
+    $('#sync-create').click();
+    await until(() => app.cloud.status.kind === 'idle');
+    const code = CloudSync.formatCode(app.cloud.code);
+    expect(text('#toast')).toBe(`Code créé : ${code}`);
+    expect($('#sync-on').hidden).toBe(false);
+    expect($('#sync-off').hidden).toBe(true);
+    expect(text('#sync-code')).toBe(code);
+    expect(text('#sync-status')).toMatch(/^✓ Synchronisé à \d\d:\d\d\.$/);
+    expect($('#sync-badge').hidden).toBe(false);
+    expect($('#sync-badge').dataset.kind).toBe('idle');
+    expect($('#sync-badge').title).toBe(`Synchronisation cloud (${code}) : ${text('#sync-status')}`);
+  });
+
+  test('libellés des états', async () => {
+    const { app } = await start();
+    const show = (status) => { app.cloud.onStatus(status); return text('#sync-status'); };
+    expect(show({ kind: 'idle', at: null })).toBe('✓ Synchronisé.');
+    expect(show({ kind: 'pending', at: null })).toBe('Modifications en attente d’envoi…');
+    expect(show({ kind: 'syncing', at: null })).toBe('Synchronisation…');
+    expect(show({ kind: 'error', message: 'Oups', at: null })).toBe('⚠ Oups');
+    expect($('#sync-status').dataset.kind).toBe('error');
+  });
+
+  test('création impossible', async () => {
+    await start({ fetch: async () => new Response('', { status: 500 }) });
+    $('#sync-create').click();
+    await until(() => text('#toast') === 'Impossible de créer un code (connexion ?).');
+  });
+
+  test('rejoindre un code : valide, invalide, erreur sans message', async () => {
+    const { app, server } = await start();
+    const res = await server.fetch(`${URL_}/api/sync`, { method: 'POST' });
+    const { code } = await res.json();
+    const form = $('#sync-join');
+    form.elements.code.value = 'nope';
+    submit(form);
+    await until(() => text('#toast') === 'Code invalide : 8 caractères attendus.');
+    expect(form.elements.code.value).toBe('nope');
+    form.elements.code.value = code.toLowerCase();
+    submit(form);
+    await until(() => text('#toast') === `Appareil relié au code ${CloudSync.formatCode(code)}.`);
+    expect(form.elements.code.value).toBe('');
+    expect(app.cloud.code).toBe(code);
+    vi.spyOn(app.cloud, 'join').mockRejectedValue({});
+    submit(form);
+    await until(() => text('#toast') === 'Impossible de rejoindre ce code.');
+  });
+
+  test('copier, synchroniser, se déconnecter, badge', async () => {
+    const { app } = await start();
+    $('#sync-create').click();
+    await until(() => app.cloud.status.kind === 'idle');
+    vi.stubGlobal('prompt', vi.fn());
+    $('#sync-copy').click();
+    expect(prompt).toHaveBeenCalledWith('Copier :', CloudSync.formatCode(app.cloud.code));
+    const pull = vi.spyOn(app.cloud, 'pull');
+    $('#sync-now').click();
+    expect(pull).toHaveBeenCalled();
+    document.body.classList.add('sidebar-hidden');
+    const scroll = vi.spyOn($('#sync-section'), 'scrollIntoView');
+    $('#sync-badge').click();
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(false);
+    expect($('.tab[data-tab="settings"]').classList.contains('active')).toBe(true);
+    expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    $('#sync-leave').click();
+    expect(confirm).toHaveBeenCalledWith('Déconnecter cet appareil du code ? Les données restent sur cet appareil et dans le cloud.');
+    expect(app.cloud.code).toBeTruthy();
+    confirm.mockReturnValue(true);
+    $('#sync-leave').click();
+    expect(app.cloud.code).toBe(null);
+    expect($('#sync-off').hidden).toBe(false);
+    expect($('#sync-badge').hidden).toBe(true);
+  });
+
+  test('image absente de l’appareil : téléchargée depuis le cloud et gardée', async () => {
+    const { app, server } = await start();
+    $('#sync-create').click();
+    await until(() => app.cloud.status.kind === 'idle');
+    const code = app.cloud.code;
+    await server.fetch(`${URL_}/api/sync/${code}/blob/${sha()}`, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array([1, 2, 3]) });
+    app.store.saveBackground(BG());
+    await until(() => overlays(app).length);
+    expect(await Backgrounds.getBlob(sha())).toBeTruthy();
+    // Absente aussi du cloud.
+    app.store.saveBackground(BG({ id: 'h', hash: sha([8]) }));
+    await until(() => text('#bg-list').includes('⚠'));
+  });
+
+  test('envoi des images locales au cloud (lecture en erreur ignorée)', async () => {
+    const { app, server } = await start();
+    await Backgrounds.putBlob(sha(), png());
+    app.store.saveBackground(BG());
+    $('#sync-create').click();
+    await until(() => app.cloud.status.kind === 'idle');
+    expect(server.env.SYNC_KV.map.has(`blob:${app.cloud.code}:${sha()}`)).toBe(true);
+    vi.spyOn(Backgrounds, 'getBlob').mockRejectedValue(new Error('IDB'));
+    app.store.saveBackground(BG({ id: 'h', hash: sha([6]) }));
+    await app.cloud.pushNow();
+    expect(app.cloud.status.kind).toBe('idle');
+  });
+});

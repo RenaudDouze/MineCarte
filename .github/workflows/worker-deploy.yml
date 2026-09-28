@@ -1,11 +1,12 @@
 name: Déploiement du worker de synchronisation
 
 on:
-  push:
+  # Après une CI verte sur main (le code du worker y est testé à 100 % de
+  # couverture et de mutation), et seulement si le worker a changé.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - worker/**
-      - .github/workflows/worker-deploy.yml
   workflow_dispatch:
 
 permissions:
@@ -17,14 +18,32 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: worker
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+
+      # Commit de fusion sur main : on compare à son premier parent.
+      - name: Worker modifié ?
+        id: changed
+        env:
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          if [ "$MANUAL" = "true" ] || ! git diff --quiet HEAD~1 HEAD -- . ../.github/workflows/worker-deploy.yml; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Worker inchangé : pas de déploiement."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v7
+        if: steps.changed.outputs.deploy == 'true'
         with:
           node-version: 24
           cache: npm
@@ -32,14 +51,13 @@ jobs:
 
       # Wrangler 4 depuis package-lock.json : même version en CI qu'en local.
       - name: Dépendances
+        if: steps.changed.outputs.deploy == 'true'
         run: npm ci
 
-      - name: Tests
-        run: node --test
-
       # Configuration par variables et secrets du dépôt (voir worker/README.md).
-      # S'il en manque, on s'arrête après les tests.
+      # S'il en manque, on ne déploie pas.
       - name: Configurer
+        if: steps.changed.outputs.deploy == 'true'
         id: config
         env:
           HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}

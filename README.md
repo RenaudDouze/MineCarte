@@ -73,7 +73,35 @@ python3 -m http.server 8000
 | `worker/` | Worker Cloudflare de synchronisation |
 | `js/backgrounds.js` | Images des fonds importés (IndexedDB, par empreinte SHA-256) |
 | `js/store.js` | Modèle de données (POI, liens, chemins), persistance, import / export |
+| `js/utils.js` | Fonctions partagées (coordonnées, conversions, longueurs, DOM) |
 | `js/app.js` | Carte, rendu, interactions |
+
+## Développement et contrôles qualité
+
+Le site n'a besoin d'aucune dépendance pour fonctionner ; les outils de test, eux, s'installent
+avec `npm ci` (Node 22.12 ou plus).
+
+```sh
+npm run lint            # oxlint, aucun avertissement toléré
+npm run typecheck       # TypeScript (vérification des JS via JSDoc)
+npm test                # tests unitaires (Vitest + jsdom)
+npm run test:coverage   # idem, couverture exigée à 100 % (lignes, branches, fonctions)
+npm run test:mutation   # Stryker, score de mutation exigé à 100 % (MUTATE=js/store.js pour un module)
+npm run test:e2e        # Playwright sur le site construit (npm run build)
+npm run build           # site statique dans _site/ (SYNC_WORKER_URL pour la synchronisation)
+```
+
+La CI (`.github/workflows/ci.yml`) lance sur chaque PR, dans des jobs séparés : lint, types,
+tests unitaires + couverture 100 %, tests e2e, mutation testing à 100 % (un job par module,
+agrégés dans le check « Mutation testing (100 %) »), construction du worker, audit des
+dépendances, puis le build. Le site et le worker ne sont déployés qu'après une CI verte sur
+`main`. CodeQL et Dependabot complètent le tout.
+
+Pour bloquer le merge d'une PR tant qu'un contrôle échoue : Settings → Branches → règle sur
+`main` → *Require status checks to pass*, avec les checks « Linter », « Vérification des
+types », « Tests unitaires + couverture 100 % », « Tests fonctionnels (Playwright) »,
+« Mutation testing (100 %) », « Worker de synchronisation (bundle + audit) », « Audit des
+dépendances » et « Build du site ».
 
 Coordonnées : la carte utilise `L.CRS.Simple`, avec 1 pixel = 1 bloc au zoom 0,
 `lng = X` et `lat = -Z` (Z croît vers le sud, comme dans le jeu).

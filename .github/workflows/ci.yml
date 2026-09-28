@@ -1,0 +1,188 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Linter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    name: Vérification des types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  unit-tests:
+    name: Tests unitaires + couverture 100 %
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Seuils à 100 % (lignes, branches, fonctions, instructions) dans
+      # vitest.config.js : la moindre ligne non couverte fait échouer le job.
+      - run: npm run test:coverage
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  e2e-tests:
+    name: Tests fonctionnels (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+  mutation-plan:
+    name: Mutation testing — plan
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # Un job par module (ou groupe de modules partageant leurs tests),
+      # d'après les cibles de stryker.config.mjs.
+      - id: plan
+        run: node .github/scripts/mutation-matrix.mjs
+
+  mutation-tests-module:
+    name: Mutation testing — ${{ matrix.name }}
+    needs: mutation-plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.mutation-plan.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Seuil bloquant à 100 % : un seul mutant survivant fait échouer le job.
+      - run: npx stryker run
+        env:
+          MUTATE: ${{ matrix.mutate }}
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-report-${{ matrix.name }}
+          path: reports/mutation/
+          retention-days: 14
+
+  # Un seul check stable « Mutation testing (100 %) » pour la protection de
+  # branche, quel que soit le nombre de modules (voir README.md).
+  mutation-tests:
+    name: Mutation testing (100 %)
+    needs: mutation-tests-module
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tous les modules à 100 %
+        env:
+          RESULT: ${{ needs.mutation-tests-module.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::Mutation testing : au moins un module sous 100 % ($RESULT)."
+            exit 1
+          fi
+
+  worker:
+    name: Worker de synchronisation (bundle + audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      # Le code du worker est testé avec le reste (tests unitaires, mutation) ;
+      # ici on vérifie que Wrangler sait le construire, sans rien déployer.
+      - run: npx wrangler deploy --dry-run --outdir dist
+      - run: npm audit --audit-level=high
+
+  audit:
+    name: Audit des dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Outils de développement uniquement : le site publié n'embarque aucune
+      # dépendance npm (Leaflet est dans vendor/).
+      - run: npm audit --audit-level=high
+
+  build:
+    name: Build du site
+    needs: [lint, typecheck, unit-tests, e2e-tests, mutation-tests, worker, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm run build
+        env:
+          SYNC_WORKER_URL: ${{ vars.SYNC_WORKER_URL }}
+      # De quoi ouvrir le site d'une PR en local sans attendre le merge.
+      - if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-build-preview
+          path: _site/
+          include-hidden-files: true
+          retention-days: 7

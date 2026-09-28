@@ -1,0 +1,8 @@
+node_modules/
+coverage/
+reports/
+.stryker-tmp/
+playwright-report/
+test-results/
+_site/
+_site-e2e/

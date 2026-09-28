@@ -1,7 +1,11 @@
 name: Déploiement GitHub Pages
 
 on:
-  push:
+  # Après une CI verte sur main seulement : jamais de déploiement d'un commit
+  # dont un contrôle (lint, types, tests, couverture, mutation, e2e) a échoué.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -16,25 +20,28 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Le commit exact validé par la CI, pas la tête de main du moment.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
 
       - uses: actions/configure-pages@v6
 
-      # Site statique : on publie uniquement les fichiers utiles.
-      - name: Préparer le site
+      - name: Construire le site
         env:
           # URL du worker de synchronisation (variable de dépôt, voir worker/README.md).
           SYNC_WORKER_URL: ${{ vars.SYNC_WORKER_URL }}
-        run: |
-          mkdir _site
-          cp -r index.html css js vendor _site/
-          touch _site/.nojekyll
-          node -e 'console.log("window.MINECARTE_CONFIG = Object.assign(" + JSON.stringify({ syncUrl: process.env.SYNC_WORKER_URL || "" }) + ", window.MINECARTE_CONFIG);")' > _site/js/config.js
+        run: npm run build
 
       - uses: actions/upload-pages-artifact@v5
         with:
@@ -42,3 +49,17 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v5
+
+      - name: Vérification après déploiement
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "${PAGE_URL}js/app.js" -o /dev/null && curl -fsS "$PAGE_URL" | grep -q '<div id="map"'; then
+              echo "Site en ligne : $PAGE_URL"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Le site déployé ne répond pas correctement ($PAGE_URL)."
+          exit 1

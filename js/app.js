@@ -4,15 +4,14 @@
 (function () {
   'use strict';
 
-  const DIM_LABELS = { overworld: 'Overworld', nether: 'Nether', end: 'End' };
-  const SWATCHES = [
-    '#e53935', '#fb8c00', '#fdd835', '#43a047', '#00acc1',
-    '#1e88e5', '#8e24aa', '#d81b60', '#6d4c41', '#ffffff', '#212121',
-  ];
+  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, nearestSegment } = Utils;
   const OPTIONS_KEY = 'minecarte:options';
 
   const store = new Store();
+  /** @type {(sel: string) => any} */
   const $ = (sel) => document.querySelector(sel);
+  /** @type {(sel: string) => HTMLElement[]} */
+  const $$ = (sel) => /** @type {HTMLElement[]} */ ([...document.querySelectorAll(sel)]);
 
   const state = {
     dim: null,
@@ -34,7 +33,7 @@
     const defaults = { grid: true, labels: true, links: true, allDims: false };
     try {
       return Object.assign(defaults, JSON.parse(localStorage.getItem(OPTIONS_KEY) || '{}'));
-    } catch (e) {
+    } catch {
       return defaults;
     }
   }
@@ -42,59 +41,9 @@
   function saveOptions() {
     try {
       localStorage.setItem(OPTIONS_KEY, JSON.stringify(state.options));
-    } catch (e) {
+    } catch {
       /* stockage indisponible : on ignore */
     }
-  }
-
-  // Centre du bloc (x, z) en coordonnées Leaflet.
-  function toLatLng(x, z) {
-    return L.latLng(-(z + 0.5), x + 0.5);
-  }
-
-  function fromLatLng(latlng) {
-    return { x: Math.floor(latlng.lng), z: Math.floor(-latlng.lat) };
-  }
-
-  function esc(str) {
-    return String(str).replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    })[c]);
-  }
-
-  // Petit constructeur d'éléments DOM.
-  function h(tag, attrs, ...children) {
-    const el = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs || {})) {
-      if (v == null || v === false) continue;
-      if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-      else if (k === 'style') el.style.cssText = v;
-      else el.setAttribute(k, v === true ? '' : v);
-    }
-    for (const child of children.flat()) {
-      if (child == null || child === false) continue;
-      el.append(child instanceof Node ? child : document.createTextNode(String(child)));
-    }
-    return el;
-  }
-
-  function pathLength(points) {
-    let total = 0;
-    for (let i = 1; i < points.length; i++) {
-      total += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-    }
-    return Math.round(total);
-  }
-
-  function fmt(n) {
-    return n.toLocaleString('fr-FR');
-  }
-
-  // Conversion Overworld <-> Nether (facteur 8).
-  function convert(dim, x, z) {
-    if (dim === 'overworld') return { dim: 'nether', x: Math.floor(x / 8), z: Math.floor(z / 8) };
-    if (dim === 'nether') return { dim: 'overworld', x: x * 8, z: z * 8 };
-    return null;
   }
 
   let toastTimer;
@@ -125,10 +74,10 @@
     attributionControl: false,
     boxZoom: false,
   });
-  map.createPane('imagePane').style.zIndex = 220;
-  map.createPane('gridPane').style.zIndex = 250;
-  map.createPane('linkPane').style.zIndex = 390;
-  map.createPane('pathPane').style.zIndex = 395;
+  map.createPane('imagePane').style.zIndex = '220';
+  map.createPane('gridPane').style.zIndex = '250';
+  map.createPane('linkPane').style.zIndex = '390';
+  map.createPane('pathPane').style.zIndex = '395';
 
   const terrainLayers = {};
   function terrainLayer(dim) {
@@ -162,7 +111,7 @@
     if (state.dim) state.views[state.dim] = { center: map.getCenter(), zoom: map.getZoom() };
     state.dim = dim;
     document.body.dataset.dim = dim;
-    document.querySelectorAll('.dim-btn').forEach((b) => b.classList.toggle('active', b.dataset.dim === dim));
+    $$('.dim-btn').forEach((b) => b.classList.toggle('active', b.dataset.dim === dim));
     applyLayers();
     const v = view || state.views[dim];
     map.setView(v.center, v.zoom, { animate: false });
@@ -376,8 +325,8 @@
   }
 
   function fillSwatches() {
-    document.querySelectorAll('.swatches').forEach((box) => {
-      const input = box.closest('form').elements[box.dataset.target];
+    $$('.swatches').forEach((box) => {
+      const input = /** @type {HTMLInputElement} */ (box.closest('form').elements[box.dataset.target]);
       box.replaceChildren(...SWATCHES.map((c) => h('button', {
         type: 'button',
         class: 'swatch',
@@ -536,10 +485,9 @@
     L.popup({ minWidth: 220 }).setLatLng(latlng).setContent(content).openOn(map);
   }
 
+  // Appelé depuis la liste, qui ne montre que les chemins de la dimension affichée.
   function focusPath(id) {
     const path = store.getPath(id);
-    if (!path) return;
-    if (path.dim !== state.dim) setDimension(path.dim);
     const bounds = L.latLngBounds(path.points.map(([x, z]) => toLatLng(x, z)));
     map.fitBounds(bounds.pad(0.2), { maxZoom: 2, animate: false });
     const mid = path.points[Math.floor(path.points.length / 2)];
@@ -702,18 +650,8 @@
 
   function insertEditPoint(latlng) {
     const ed = state.edit;
-    const p = map.latLngToLayerPoint(latlng);
-    let best = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < ed.points.length - 1; i++) {
-      const a = map.latLngToLayerPoint(toLatLng(...ed.points[i]));
-      const b = map.latLngToLayerPoint(toLatLng(...ed.points[i + 1]));
-      const dist = L.LineUtil.pointToSegmentDistance(p, a, b);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = i;
-      }
-    }
+    const vertices = ed.points.map(([x, z]) => map.latLngToLayerPoint(toLatLng(x, z)));
+    const best = nearestSegment(map.latLngToLayerPoint(latlng), vertices);
     const pt = fromLatLng(latlng);
     ed.points.splice(best + 1, 0, [pt.x, pt.z]);
     rebuildEdit();
@@ -819,14 +757,15 @@
   }
 
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#context-menu') && !e.target.closest('#map')) hideContextMenu();
+    const target = /** @type {Element} */ (e.target);
+    if (!target.closest('#context-menu') && !target.closest('#map')) hideContextMenu();
   });
 
   // --- Clavier ------------------------------------------------------------------------
 
   document.addEventListener('keydown', (e) => {
     if (document.querySelector('dialog[open]')) return;
-    const typing = e.target.matches('input, textarea, select');
+    const typing = /** @type {Element} */ (e.target).matches('input, textarea, select');
     if (e.key === 'Escape') {
       hideContextMenu();
       cancelMode();
@@ -843,13 +782,10 @@
 
   // --- URL (#dimension/x/z/zoom) --------------------------------------------------------
 
-  let hashLock = false;
+  // replaceState ne déclenche pas hashchange : pas de boucle avec l'écouteur ci-dessous.
   function updateHash() {
-    if (!state.dim) return;
     const { x, z } = fromLatLng(map.getCenter());
-    hashLock = true;
     history.replaceState(null, '', `#${state.dim}/${x}/${z}/${map.getZoom()}`);
-    hashLock = false;
   }
 
   function parseHash() {
@@ -859,24 +795,24 @@
   }
 
   window.addEventListener('hashchange', () => {
-    if (hashLock) return;
     const v = parseHash();
     if (v) setDimension(v.dim, v);
   });
 
   // --- Barre du haut et panneau latéral ---------------------------------------------------
 
-  document.querySelectorAll('.dim-btn').forEach((btn) => {
+  $$('.dim-btn').forEach((btn) => {
     btn.addEventListener('click', () => setDimension(btn.dataset.dim));
   });
 
   $('#goto').addEventListener('submit', (e) => {
     e.preventDefault();
+    // Champs type="number" (x et z requis) : le navigateur n'y laisse qu'un
+    // nombre fini ou une chaîne vide.
     const f = e.target.elements;
     const x = Math.round(Number(f.x.value));
     const z = Math.round(Number(f.z.value));
-    const y = f.y.value.trim() === '' ? null : Math.round(Number(f.y.value));
-    if (!Number.isFinite(x) || !Number.isFinite(z) || (y !== null && !Number.isFinite(y))) return;
+    const y = f.y.value === '' ? null : Math.round(Number(f.y.value));
     map.setView(toLatLng(x, z), Math.max(map.getZoom(), 1));
     openLocationPopup(x, z, y);
   });
@@ -951,10 +887,10 @@
     setSidebar(document.body.classList.contains('sidebar-hidden'));
   });
 
-  document.querySelectorAll('.tab').forEach((tab) => {
+  $$('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-      document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === tab.dataset.tab));
+      $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
+      $$('.panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === tab.dataset.tab));
     });
   });
 
@@ -1050,7 +986,7 @@
       } else {
         bgState.missing.set(hash, Date.now());
       }
-    } catch (err) {
+    } catch {
       bgState.missing.set(hash, Date.now());
     } finally {
       bgState.loading.delete(hash);
@@ -1178,7 +1114,7 @@
       bgDialogSize = await Backgrounds.imageSize(file);
       const f = $('#bg-form').elements;
       if (!f.label.value) f.label.value = file.name.replace(/\.[^.]+$/, '');
-    } catch (err) {
+    } catch {
       bgDialogSize = null;
       toast('Image illisible.');
     }
@@ -1221,7 +1157,7 @@
         visible: existing ? existing.visible : true,
       }, image));
       $('#bg-dialog').close();
-      if (!existing && bg) focusBackground(bg);
+      if (!existing) focusBackground(bg);
     } catch (err) {
       alert(`Impossible d'enregistrer le fond : ${err.message || err}`);
     }
@@ -1241,8 +1177,8 @@
     getBlob: (hash) => Backgrounds.getBlob(hash).catch(() => null),
   });
 
+  // Appelé par CloudSync, qui ne démarre que si la synchronisation est configurée.
   function renderSync(status) {
-    if (!cloud.enabled) return;
     const on = !!cloud.code;
     $('#sync-section').hidden = false;
     $('#sync-off').hidden = on;
@@ -1267,7 +1203,7 @@
 
   function showSettings() {
     setSidebar(true);
-    document.querySelector('.tab[data-tab="settings"]').click();
+    $('.tab[data-tab="settings"]').click();
     $('#sync-section').scrollIntoView({ block: 'nearest' });
   }
 
@@ -1277,7 +1213,7 @@
     try {
       const code = await cloud.create();
       toast(`Code créé : ${CloudSync.formatCode(code)}`);
-    } catch (err) {
+    } catch {
       toast('Impossible de créer un code (connexion ?).');
     }
   });
