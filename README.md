@@ -18,13 +18,9 @@ python3 -m http.server 8000
 
 - **Trois dimensions** : Overworld, Nether et End, avec un onglet chacune. Chaque dimension
   garde sa propre vue (position et zoom).
-- **Fond** : par défaut un fond neutre (aplat légèrement texturé par dimension ; dans l'End, l'île
-  centrale, ses piliers et le vide, qui sont les mêmes dans tous les mondes), pour ne pas être
-  confondu avec une vraie carte. En option (Réglages → « Fond décoratif (fictif) »), un fond
-  décoratif est généré pour chaque dimension à partir d'une graine modifiable (biomes pour
-  l'Overworld, biomes du Nether et lacs de lave, îles extérieures au-delà de 1024 blocs pour
-  l'End). Il ne reproduit **pas** le vrai monde Minecraft : la mention « Fond fictif — pas le
-  terrain réel » reste alors affichée sur la carte.
+- **Fond neutre** : un aplat légèrement texturé par dimension, pour ne pas être confondu avec
+  une vraie carte. Dans l'End, seuls l'île centrale, ses piliers et le vide sont dessinés, car ils
+  sont les mêmes dans tous les mondes.
 - **Grille** : blocs, chunks (16) et régions (512), axes X = 0 et Z = 0. Les coordonnées sous la
   souris s'affichent en bas à gauche (chunk, région, équivalent Nether ⇄ Overworld).
 - **POI** : ajout (bouton « + POI » ou clic droit sur la carte), modification et suppression.
@@ -61,8 +57,8 @@ python3 -m http.server 8000
 | --- | --- |
 | `index.html` | Page et dialogues |
 | `css/style.css` | Styles |
-| `js/noise.js` | Bruit de valeur seedé (fBm) |
-| `js/terrain.js` | Génération des fonds des dimensions et de la grille (`L.GridLayer`) |
+| `js/noise.js` | Bruit de valeur (texture du fond, contour de l'île de l'End) |
+| `js/terrain.js` | Fond des dimensions et grille (`L.GridLayer`) |
 | `js/icons.js` | Chargement et recherche des icônes d'items |
 | `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
 | `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |

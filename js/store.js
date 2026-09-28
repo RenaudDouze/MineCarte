@@ -185,11 +185,6 @@
 
     // --- Divers ------------------------------------------------------------
 
-    setSeed(seed) {
-      this.data.seed = String(seed);
-      this.save();
-    }
-
     replaceAll(raw, source) {
       this.data = sanitize(raw);
       this.save(source);
