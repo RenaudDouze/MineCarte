@@ -31,8 +31,7 @@
   // --- Utilitaires -----------------------------------------------------------
 
   function loadOptions() {
-    // « generated » : fond décoratif fictif, désactivé par défaut (fond neutre).
-    const defaults = { generated: false, grid: true, labels: true, links: true, allDims: false };
+    const defaults = { grid: true, labels: true, links: true, allDims: false };
     try {
       return Object.assign(defaults, JSON.parse(localStorage.getItem(OPTIONS_KEY) || '{}'));
     } catch (e) {
@@ -130,15 +129,10 @@
   map.createPane('linkPane').style.zIndex = 390;
   map.createPane('pathPane').style.zIndex = 395;
 
-  const seedValue = () => Noise.seedFrom(store.data.seed);
   const terrainLayers = {};
-  const terrainStyle = () => (state.options.generated ? 'generated' : 'neutral');
   function terrainLayer(dim) {
-    const key = `${terrainStyle()}:${dim}`;
-    if (!terrainLayers[key]) {
-      terrainLayers[key] = new Terrain.TerrainLayer({ dimension: dim, style: terrainStyle(), seed: seedValue() });
-    }
-    return terrainLayers[key];
+    if (!terrainLayers[dim]) terrainLayers[dim] = new Terrain.TerrainLayer({ dimension: dim });
+    return terrainLayers[dim];
   }
   const gridLayer = new Terrain.GridOverlay();
 
@@ -153,10 +147,9 @@
       if (layer !== current && map.hasLayer(layer)) map.removeLayer(layer);
     }
     if (!map.hasLayer(current)) current.addTo(map);
-    $('#fake-note').hidden = !state.options.generated;
     if (state.options.grid && !map.hasLayer(gridLayer)) gridLayer.addTo(map);
     if (!state.options.grid && map.hasLayer(gridLayer)) map.removeLayer(gridLayer);
-    map.getContainer().style.background = Terrain.background[terrainStyle()][state.dim];
+    map.getContainer().style.background = Terrain.background[state.dim];
     map.getContainer().classList.toggle('hide-labels', !state.options.labels);
   }
 
@@ -971,7 +964,7 @@
   });
 
   // Réglages
-  const optionInputs = { generated: '#opt-generated', grid: '#opt-grid', labels: '#opt-labels', links: '#opt-links', allDims: '#poi-all-dims' };
+  const optionInputs = { grid: '#opt-grid', labels: '#opt-labels', links: '#opt-links', allDims: '#poi-all-dims' };
   for (const [key, sel] of Object.entries(optionInputs)) {
     const input = $(sel);
     input.checked = !!state.options[key];
@@ -981,19 +974,6 @@
       applyLayers();
       render();
     });
-  }
-
-  $('#seed').value = store.data.seed;
-  $('#seed-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    store.setSeed($('#seed').value.trim() || 'minecarte');
-    applySeed();
-    toast('Graine appliquée.');
-  });
-
-  function applySeed() {
-    $('#seed').value = store.data.seed;
-    Object.values(terrainLayers).forEach((layer) => layer.setSeed(seedValue()));
   }
 
   $('#export').addEventListener('click', () => {
@@ -1016,7 +996,6 @@
       cancelMode();
       map.closePopup();
       store.replaceAll(raw);
-      applySeed();
       toast(`${store.data.pois.length} POI et ${store.data.paths.length} chemins importés.`);
     } catch (err) {
       alert(`Fichier invalide : ${err.message}`);
@@ -1098,9 +1077,6 @@
   // --- Démarrage ------------------------------------------------------------------------------
 
   store.onChange(() => render());
-  store.onChange((data, source) => {
-    if (source === 'remote' && $('#seed').value !== data.seed) applySeed();
-  });
   // Les icônes d'items ne sont chargées que si un POI en utilise une.
   function loadIconsIfNeeded() {
     if (!Icons.isLoaded() && store.data.pois.some((p) => p.icon)) Icons.load().then(render, () => {});
