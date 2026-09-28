@@ -109,6 +109,19 @@
           <div class="swatches" data-target="color"></div>
         </div>
       </div>
+      <div class="field">
+        <span>Icône</span>
+        <input type="hidden" name="icon">
+        <div class="icon-row">
+          <span id="icon-current" class="icon-current"></span>
+          <button type="button" id="icon-choose">Choisir un item…</button>
+          <button type="button" id="icon-clear">Retirer</button>
+        </div>
+        <div id="icon-picker" class="icon-picker" hidden>
+          <input id="icon-search" type="search" placeholder="Rechercher un item (en anglais : diamond, totem, bed…)">
+          <div id="icon-grid" class="icon-grid"></div>
+        </div>
+      </div>
       <label>Dimension
         <select name="dim">
           <option value="overworld">Overworld</option>
@@ -145,6 +158,11 @@
           <div class="swatches" data-target="color"></div>
         </div>
       </div>
+      <div class="field">
+        <span>Épaisseur <b id="weight-value"></b></span>
+        <input name="weight" type="range" min="1" max="16" step="1" value="4">
+        <div class="weight-preview-box"><div id="weight-preview"></div></div>
+      </div>
       <p id="path-info" class="hint"></p>
       <div class="dialog-actions">
         <button type="button" data-close>Annuler</button>
@@ -158,6 +176,7 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="js/noise.js"></script>
   <script src="js/terrain.js"></script>
+  <script src="js/icons.js"></script>
   <script src="js/store.js"></script>
   <script src="js/app.js"></script>
 </body>
