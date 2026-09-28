@@ -18,6 +18,9 @@ export const targets = {
   'js/noise.js': ['tests/noise.test.js'],
   'js/terrain.js': ['tests/terrain.test.js'],
   'js/store.js': ['tests/store.test.js'],
+  'js/icons.js': ['tests/icons.test.js'],
+  'js/config.js': ['tests/config.test.js'],
+  'js/backgrounds.js': ['tests/backgrounds.test.js'],
 };
 
 const selected = process.env.MUTATE ? process.env.MUTATE.split(',') : Object.keys(targets);

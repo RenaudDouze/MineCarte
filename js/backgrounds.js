@@ -19,11 +19,9 @@
     if (!dbPromise) {
       dbPromise = new Promise((resolve, reject) => {
         const req = indexedDB.open(DB_NAME, 2);
-        req.onupgradeneeded = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains(LEGACY)) db.createObjectStore(LEGACY, { keyPath: 'id' });
-          if (!db.objectStoreNames.contains(BLOBS)) db.createObjectStore(BLOBS, { keyPath: 'hash' });
-        };
+        // Mise à niveau depuis rien ou depuis la version 1 (qui n'avait que
+        // l'ancien stockage) : le stockage par empreinte n'existe jamais encore.
+        req.onupgradeneeded = () => req.result.createObjectStore(BLOBS, { keyPath: 'hash' });
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
       });
@@ -77,23 +75,24 @@
   // Supprime les images qu'aucun fond ne référence plus.
   async function prune(keepHashes) {
     const keys = await run(BLOBS, 'readonly', (s) => s.getAllKeys());
-    const unused = (keys || []).filter((h) => !keepHashes.has(h));
-    if (unused.length) await run(BLOBS, 'readwrite', (s) => unused.forEach((h) => s.delete(h)));
+    await run(BLOBS, 'readwrite', (s) => keys.filter((h) => !keepHashes.has(h)).forEach((h) => s.delete(h)));
   }
 
   // Fonds importés avant la synchronisation des images : on déplace chaque
   // image dans le stockage par empreinte et on renvoie leurs métadonnées.
   async function migrateLegacy() {
-    const legacy = (await run(LEGACY, 'readonly', (s) => s.getAll())) || [];
+    const db = await open();
+    if (!db.objectStoreNames.contains(LEGACY)) return [];
+    const legacy = await run(LEGACY, 'readonly', (s) => s.getAll());
     const metas = [];
     for (const bg of legacy) {
-      if (!bg || !bg.blob) continue;
+      if (!bg.blob) continue;
       const hash = await sha256(bg.blob);
       await putBlob(hash, bg.blob);
       const { blob, ...meta } = bg;
       metas.push(Object.assign(meta, { hash, type: blob.type }));
     }
-    if (legacy.length) await run(LEGACY, 'readwrite', (s) => s.clear());
+    await run(LEGACY, 'readwrite', (s) => s.clear());
     return metas;
   }
 

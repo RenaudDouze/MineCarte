@@ -44,7 +44,8 @@
   // Recherche sur le nom anglais et l'identifiant (ex. « diamond », « totem »).
   function search(query, limit) {
     if (!items) return [];
-    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    // Les segments vides (espaces multiples) valent « tout » : inutile de les filtrer.
+    const words = query.toLowerCase().split(/\s/);
     const out = [];
     for (const item of items) {
       const hay = `${item.readable} ${item.id}`.toLowerCase();
