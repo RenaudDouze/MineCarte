@@ -21,6 +21,7 @@ export const targets = {
   'js/icons.js': ['tests/icons.test.js'],
   'js/config.js': ['tests/config.test.js'],
   'js/backgrounds.js': ['tests/backgrounds.test.js'],
+  'js/sync.js': ['tests/sync.test.js'],
 };
 
 const selected = process.env.MUTATE ? process.env.MUTATE.split(',') : Object.keys(targets);

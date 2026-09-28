@@ -21,7 +21,7 @@
     if (value && typeof value === 'object') {
       return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stable(value[k])}`).join(',')}}`;
     }
-    return JSON.stringify(value === undefined ? null : value);
+    return JSON.stringify(value ?? null);
   }
 
   function snapshot(data) {
@@ -33,11 +33,7 @@
   // Un élément absent d'un côté mais présent dans la base a été supprimé.
   function merge(base, local, remote) {
     const b = base || {};
-    const pick = (bv, lv, rv) => {
-      if (stable(lv) === stable(bv)) return rv;
-      if (stable(rv) === stable(bv)) return lv;
-      return lv;
-    };
+    const pick = (bv, lv, rv) => (stable(lv) === stable(bv) ? rv : lv);
     const list = (key) => {
       const index = (arr) => new Map((arr || []).map((item) => [item.id, item]));
       const bm = index(b[key]);
@@ -55,7 +51,7 @@
   }
 
   function normalizeCode(raw) {
-    return String(raw || '').toUpperCase().replace(/[\s-]/g, '');
+    return String(raw).toUpperCase().replace(/[\s-]/g, '');
   }
 
   function isValidCode(code) {
@@ -90,7 +86,7 @@
 
     loadState() {
       try {
-        const s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
+        const s = JSON.parse(localStorage.getItem(STATE_KEY));
         return s && isValidCode(s.code) && Number.isInteger(s.version) ? s : null;
       } catch {
         return null;
@@ -148,7 +144,7 @@
     }
 
     fail(err) {
-      const message = err && err.status === 404
+      const message = err.status === 404
         ? 'Code inconnu ou expiré.'
         : 'Synchronisation impossible (hors ligne ?). Nouvel essai automatique.';
       this.setStatus('error', message);
@@ -156,7 +152,7 @@
     }
 
     isDirty() {
-      return !this.state.base || stable(snapshot(this.store.data)) !== stable(this.state.base);
+      return stable(snapshot(this.store.data)) !== stable(this.state.base);
     }
 
     // Applique des données fusionnées sans déclencher de nouvelle poussée.
@@ -255,15 +251,15 @@
     // Envoie les images des fonds absents de la dernière version connue du
     // serveur (celles qu'il a déjà sont conservées tant qu'elles sont référencées).
     async uploadNewImages(data) {
-      const known = new Set(((this.state.base && this.state.base.backgrounds) || []).map((b) => b.hash));
-      for (const bg of data.backgrounds || []) {
-        if (known.has(bg.hash)) continue;
-        known.add(bg.hash);
+      const sent = new Set();
+      for (const bg of data.backgrounds) {
+        if (sent.has(bg.hash) || this.state.base?.backgrounds?.some((b) => b.hash === bg.hash)) continue;
+        sent.add(bg.hash);
         const blob = this.hooks.getBlob ? await this.hooks.getBlob(bg.hash) : null;
         if (!blob) continue; // image d'un autre appareil pas encore reçue : elle est déjà dans le cloud
         const res = await fetch(`${this.url}/api/sync/${this.state.code}/blob/${bg.hash}`, {
           method: 'PUT',
-          headers: { 'Content-Type': bg.type || blob.type || 'image/png' },
+          headers: { 'Content-Type': bg.type },
           body: blob,
         });
         if (res.status === 413) {
@@ -284,7 +280,6 @@
     }
 
     pull() {
-      if (!this.state) return Promise.resolve();
       return this.enqueue(async () => {
         if (!this.state) return;
         let res;
@@ -294,12 +289,11 @@
         } catch (err) {
           return this.fail(err);
         }
-        if (res.json.version !== this.state.version) {
-          this.apply(merge(this.state.base, snapshot(this.store.data), res.json.data || {}));
-          this.state.version = res.json.version;
-          this.state.base = res.json.data;
-          this.saveState();
-        }
+        // Même version : la fusion redonne les données locales (apply ne fait rien).
+        this.apply(merge(this.state.base, snapshot(this.store.data), res.json.data || {}));
+        this.state.version = res.json.version;
+        this.state.base = res.json.data;
+        this.saveState();
         if (this.isDirty()) await this.pushNow();
         else this.setStatus('idle');
       }).catch(() => {});
@@ -309,4 +303,5 @@
   global.CloudSync = CloudSync;
   global.CloudSync.formatCode = formatCode;
   global.CloudSync.merge = merge;
+  global.CloudSync.stable = stable;
 })(window);
