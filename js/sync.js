@@ -92,7 +92,7 @@
       try {
         const s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
         return s && isValidCode(s.code) && Number.isInteger(s.version) ? s : null;
-      } catch (e) {
+      } catch {
         return null;
       }
     }
@@ -101,7 +101,7 @@
       try {
         if (this.state) localStorage.setItem(STATE_KEY, JSON.stringify(this.state));
         else localStorage.removeItem(STATE_KEY);
-      } catch (e) {
+      } catch {
         /* stockage indisponible */
       }
     }
@@ -134,15 +134,14 @@
     }
 
     async request(method, path, body) {
-      const res = await fetch(`${this.url}/api/sync${path}`, {
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-      });
+      const init = body
+        ? { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        : { method };
+      const res = await fetch(`${this.url}/api/sync${path}`, init);
       let json = null;
       try {
         json = await res.json();
-      } catch (e) {
+      } catch {
         /* réponse vide */
       }
       return { status: res.status, json };

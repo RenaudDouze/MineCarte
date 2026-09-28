@@ -29,6 +29,11 @@
     return Math.min(16, Math.max(1, int(value, 4)));
   }
 
+  // Éléments objets d'une liste (tableau attendu) ; [] sinon.
+  function objects(value) {
+    return Array.isArray(value) ? value.filter((v) => v && typeof v === 'object') : [];
+  }
+
   function dimension(value) {
     return DIMENSIONS.includes(value) ? value : 'overworld';
   }
@@ -40,12 +45,12 @@
   // Nettoie des données venant du localStorage ou d'un import.
   function sanitize(raw) {
     const data = emptyData();
-    if (!raw || typeof raw !== 'object') return data;
+    if (raw == null) return data;
     if (raw.seed != null) data.seed = String(raw.seed);
 
     const ids = new Set();
-    for (const p of Array.isArray(raw.pois) ? raw.pois : []) {
-      if (!p || typeof p !== 'object') continue;
+    const rawLinks = new Map();
+    for (const p of objects(raw.pois)) {
       const id = typeof p.id === 'string' && p.id && !ids.has(p.id) ? p.id : uid();
       ids.add(id);
       data.pois.push({
@@ -57,12 +62,13 @@
         y: int(p.y, 64),
         z: int(p.z, 0),
         icon: icon(p.icon),
-        links: Array.isArray(p.links) ? p.links.filter((l) => typeof l === 'string') : [],
       });
+      rawLinks.set(id, p.links);
     }
     // Liens valides et symétriques uniquement.
     for (const p of data.pois) {
-      p.links = [...new Set(p.links)].filter((l) => l !== p.id && ids.has(l));
+      const links = rawLinks.get(p.id);
+      p.links = Array.isArray(links) ? [...new Set(links)].filter((l) => l !== p.id && ids.has(l)) : [];
     }
     for (const p of data.pois) {
       for (const l of p.links) {
@@ -71,8 +77,8 @@
       }
     }
 
-    for (const path of Array.isArray(raw.paths) ? raw.paths : []) {
-      if (!path || typeof path !== 'object' || !Array.isArray(path.points)) continue;
+    for (const path of objects(raw.paths)) {
+      if (!Array.isArray(path.points)) continue;
       const points = path.points
         .filter((pt) => Array.isArray(pt) && pt.length >= 2)
         .map((pt) => [int(pt[0], 0), int(pt[1], 0)]);
@@ -90,8 +96,8 @@
     // Fonds de carte importés : seules les métadonnées sont ici, l'image est
     // stockée à part (IndexedDB, et dans le cloud si la synchronisation est active).
     const SCALES = [0.25, 0.5, 1, 2, 4, 8];
-    for (const bg of Array.isArray(raw.backgrounds) ? raw.backgrounds : []) {
-      if (!bg || typeof bg !== 'object' || !/^[0-9a-f]{64}$/.test(bg.hash)) continue;
+    for (const bg of objects(raw.backgrounds)) {
+      if (!/^[0-9a-f]{64}$/.test(bg.hash)) continue;
       data.backgrounds.push({
         id: typeof bg.id === 'string' && bg.id ? bg.id : uid(),
         name: String(bg.name || 'Fond').slice(0, 100),
@@ -104,7 +110,7 @@
         height: Math.max(1, int(bg.height, 1)),
         visible: bg.visible !== false,
         hash: bg.hash,
-        type: ['image/png', 'image/jpeg', 'image/webp'].includes(bg.type) ? bg.type : 'image/png',
+        type: ['image/jpeg', 'image/webp'].includes(bg.type) ? bg.type : 'image/png',
       });
     }
     return data;
@@ -149,10 +155,10 @@
     savePoi(input) {
       let poi = input.id && this.getPoi(input.id);
       if (!poi) {
-        poi = { id: uid(), links: [] };
+        poi = { id: uid() };
         this.data.pois.push(poi);
       }
-      poi.name = String(input.name || 'POI').trim().slice(0, 100) || 'POI';
+      poi.name = String(input.name ?? '').trim().slice(0, 100) || 'POI';
       poi.color = color(input.color, '#e53935');
       poi.dim = dimension(input.dim);
       poi.x = int(input.x, 0);
@@ -160,7 +166,7 @@
       poi.z = int(input.z, 0);
       poi.icon = icon(input.icon);
 
-      const wanted = new Set((input.links || []).filter((l) => l !== poi.id && this.getPoi(l)));
+      const wanted = new Set(Array.isArray(input.links) ? input.links.filter((l) => l !== poi.id && this.getPoi(l)) : []);
       for (const other of this.data.pois) {
         if (other === poi) continue;
         const linked = other.links.includes(poi.id);
@@ -190,7 +196,7 @@
         path = { id: uid() };
         this.data.paths.push(path);
       }
-      path.name = String(input.name || 'Chemin').trim().slice(0, 100) || 'Chemin';
+      path.name = String(input.name ?? '').trim().slice(0, 100) || 'Chemin';
       path.color = color(input.color, '#ffeb3b');
       path.dim = dimension(input.dim);
       path.weight = weight(input.weight);

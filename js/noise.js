@@ -1,6 +1,6 @@
 /*
  * Bruit de valeur 2D déterministe (seedé) + fBm.
- * Sert uniquement à générer un fond de carte décoratif pour chaque dimension.
+ * Sert à la texture du fond et au contour de l'île centrale de l'End.
  */
 (function (global) {
   'use strict';

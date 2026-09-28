@@ -37,20 +37,26 @@
     bedrock: hex('#3c3c3c'),
   };
 
+  // Dix piliers d'obsidienne répartis sur un cercle de 42 blocs.
   const PILLARS = Array.from({ length: 10 }, (_, i) => {
-    const angle = 2 * (-Math.PI + (Math.PI / 10) * i);
+    const angle = (Math.PI / 5) * i;
     return [Math.round(42 * Math.cos(angle)), Math.round(42 * Math.sin(angle)), 3 + (i % 3)];
   });
 
+  // Rayon de l'île centrale selon l'angle : 115 blocs ± 45, en blocs entiers.
+  function islandRadius(angle) {
+    return Math.round(115 + (fbm(Math.cos(angle) * 3 + 10, Math.sin(angle) * 3 + 10, SEED + 211, 3) - 0.5) * 90);
+  }
+
+  // Distances comparées au carré, en entiers : le bord est exact.
   function end(x, z) {
-    const d = Math.sqrt(x * x + z * z);
-    if (d < 4) return END.bedrock;
+    const d2 = x * x + z * z;
+    if (d2 < 16) return END.bedrock;
     for (const [px, pz, r] of PILLARS) {
       if ((x - px) * (x - px) + (z - pz) * (z - pz) <= r * r) return END.obsidian;
     }
-    const angle = Math.atan2(z, x);
-    const edge = 115 + (fbm(Math.cos(angle) * 3 + 10, Math.sin(angle) * 3 + 10, SEED + 211, 3) - 0.5) * 90;
-    return d < edge ? END.stone : END.void;
+    const radius = islandRadius(Math.atan2(z, x));
+    return d2 < radius * radius ? END.stone : END.void;
   }
 
   const GENERATORS = {
@@ -95,11 +101,7 @@
           const c = generate(x, z);
           // Texture discrète : légère variation de teinte par carré de 4 blocs.
           const shade = 0.97 + 0.05 * hash2(x >> 2, z >> 2, SEED + 7);
-          const k = (j * n + i) * 4;
-          data[k] = c[0] * shade;
-          data[k + 1] = c[1] * shade;
-          data[k + 2] = c[2] * shade;
-          data[k + 3] = 255;
+          data.set([c[0] * shade, c[1] * shade, c[2] * shade, 255], (j * n + i) * 4);
         }
       }
       bctx.putImageData(img, 0, 0);
@@ -133,8 +135,10 @@
       const x0 = coords.x * blocksPerTile;
       const z0 = coords.y * blocksPerTile;
 
+      // Une famille de lignes n'est tracée que si elles sont espacées d'au
+      // moins 8 px (les espacements sont des puissances de deux).
       const drawLines = (spacing, style, width) => {
-        if (spacing * scale < 6) return;
+        if (spacing * scale < 8) return;
         ctx.strokeStyle = style;
         ctx.lineWidth = width;
         ctx.beginPath();
