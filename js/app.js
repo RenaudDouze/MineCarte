@@ -1019,25 +1019,94 @@
   });
 
   $('#reset').addEventListener('click', () => {
-    if (!confirm('Effacer tous les POI et chemins ? Cette action est irréversible (pensez à exporter).')) return;
+    const cloudNote = cloud.code ? ' Les données seront aussi effacées du cloud et des appareils reliés.' : '';
+    if (!confirm(`Effacer tous les POI et chemins ? Cette action est irréversible (pensez à exporter).${cloudNote}`)) return;
     cancelMode();
     map.closePopup();
     store.replaceAll({ seed: store.data.seed });
   });
 
+  // --- Synchronisation cloud --------------------------------------------------------
+
+  const cloud = new CloudSync(store, (window.MINECARTE_CONFIG || {}).syncUrl, renderSync);
+
+  function renderSync(status) {
+    if (!cloud.enabled) return;
+    const on = !!cloud.code;
+    $('#sync-section').hidden = false;
+    $('#sync-off').hidden = on;
+    $('#sync-on').hidden = !on;
+    $('#sync-code').textContent = CloudSync.formatCode(cloud.code);
+    const time = status.at ? status.at.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const text = {
+      off: '',
+      idle: `✓ Synchronisé${time ? ` à ${time}` : ''}.`,
+      pending: 'Modifications en attente d’envoi…',
+      syncing: 'Synchronisation…',
+      error: `⚠ ${status.message}`,
+    }[status.kind];
+    const el = $('#sync-status');
+    el.textContent = text;
+    el.dataset.kind = status.kind;
+    const badge = $('#sync-badge');
+    badge.hidden = !on;
+    badge.dataset.kind = status.kind;
+    badge.title = `Synchronisation cloud (${CloudSync.formatCode(cloud.code)}) : ${text}`;
+  }
+
+  function showSettings() {
+    setSidebar(true);
+    document.querySelector('.tab[data-tab="settings"]').click();
+    $('#sync-section').scrollIntoView({ block: 'nearest' });
+  }
+
+  $('#sync-badge').addEventListener('click', showSettings);
+
+  $('#sync-create').addEventListener('click', async () => {
+    try {
+      const code = await cloud.create();
+      toast(`Code créé : ${CloudSync.formatCode(code)}`);
+    } catch (err) {
+      toast('Impossible de créer un code (connexion ?).');
+    }
+  });
+
+  $('#sync-join').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = e.target.elements.code;
+    try {
+      const code = await cloud.join(input.value);
+      input.value = '';
+      toast(`Appareil relié au code ${CloudSync.formatCode(code)}.`);
+    } catch (err) {
+      toast(err.message || 'Impossible de rejoindre ce code.');
+    }
+  });
+
+  $('#sync-copy').addEventListener('click', () => copy(CloudSync.formatCode(cloud.code)));
+  $('#sync-now').addEventListener('click', () => cloud.pull());
+  $('#sync-leave').addEventListener('click', () => {
+    if (!confirm('Déconnecter cet appareil du code ? Les données restent sur cet appareil et dans le cloud.')) return;
+    cloud.leave();
+  });
+
   // --- Démarrage ------------------------------------------------------------------------------
 
   store.onChange(() => render());
+  store.onChange((data, source) => {
+    if (source === 'remote' && $('#seed').value !== data.seed) applySeed();
+  });
   // Les icônes d'items ne sont chargées que si un POI en utilise une.
   function loadIconsIfNeeded() {
     if (!Icons.isLoaded() && store.data.pois.some((p) => p.icon)) Icons.load().then(render, () => {});
   }
   store.onChange(loadIconsIfNeeded);
   loadIconsIfNeeded();
-  window.MineCarte = { map, store, state };
+  window.MineCarte = { map, store, state, cloud };
   fillSwatches();
   if (window.innerWidth < 720) document.body.classList.add('sidebar-hidden');
 
   const initial = parseHash();
   setDimension(initial ? initial.dim : 'overworld', initial || state.views.overworld);
+  cloud.start();
 })();

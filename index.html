@@ -11,6 +11,7 @@
   <header class="topbar">
     <button id="toggle-sidebar" class="icon-btn" title="Afficher / masquer le panneau" aria-label="Panneau">☰</button>
     <h1>MineCarte</h1>
+    <button type="button" id="sync-badge" class="sync-badge" hidden title="Synchronisation cloud">☁</button>
     <nav class="dims" aria-label="Dimensions">
       <button type="button" data-dim="overworld" class="dim-btn dim-overworld">Overworld</button>
       <button type="button" data-dim="nether" class="dim-btn dim-nether">Nether</button>
@@ -61,6 +62,31 @@
           <button type="submit">Appliquer</button>
         </form>
         <p class="hint">Le fond est décoratif : il est généré à partir de la graine mais ne reproduit pas le vrai monde Minecraft.</p>
+
+        <section id="sync-section" hidden>
+          <h3>Synchronisation cloud</h3>
+          <div id="sync-off">
+            <p class="hint">Sauvegarde tes POI et chemins dans le cloud et retrouve-les sur tes autres appareils grâce à un code.</p>
+            <div class="row"><button type="button" id="sync-create" class="primary grow">Créer un code</button></div>
+            <form id="sync-join" class="row" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
+              <input name="code" type="text" placeholder="Code existant (ex. ABCD-EFGH)" maxlength="12" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
+              <button type="submit">Rejoindre</button>
+            </form>
+          </div>
+          <div id="sync-on" hidden>
+            <div class="sync-code-row">
+              <span class="hint">Code</span>
+              <b id="sync-code" class="sync-code"></b>
+              <button type="button" id="sync-copy">Copier</button>
+            </div>
+            <div class="row wrap">
+              <button type="button" id="sync-now">Synchroniser maintenant</button>
+              <button type="button" id="sync-leave" class="danger">Se déconnecter</button>
+            </div>
+          </div>
+          <p id="sync-status" class="sync-status"></p>
+          <p class="hint">Les modifications sont synchronisées automatiquement. Toute personne qui connaît le code peut voir et modifier les données : ne le partage qu'avec qui tu veux.</p>
+        </section>
 
         <h3>Données</h3>
         <div class="row wrap">
@@ -176,8 +202,10 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="js/noise.js"></script>
   <script src="js/terrain.js"></script>
+  <script src="js/config.js"></script>
   <script src="js/icons.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

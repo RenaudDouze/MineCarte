@@ -1,0 +1,14 @@
+name = "minecarte-sync"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Espace clé-valeur dédié à MineCarte. Créé avec
+# `npx wrangler kv namespace create SYNC_KV` (voir README.md) :
+# remplace l'id ci-dessous par celui que la commande affiche avant de déployer.
+[[kv_namespaces]]
+binding = "SYNC_KV"
+id = "REMPLACER_PAR_L_ID_DU_NAMESPACE"
+
+[vars]
+# Origine autorisée (schéma + hôte, sans chemin). "*" pour tout accepter.
+ALLOWED_ORIGIN = "https://renauddouze.github.io"
