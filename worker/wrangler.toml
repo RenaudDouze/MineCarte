@@ -2,12 +2,13 @@ name = "minecarte-sync"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 
-# Espace clé-valeur dédié à MineCarte. Créé avec
-# `npx wrangler kv namespace create SYNC_KV` (voir README.md) :
-# remplace l'id ci-dessous par celui que la commande affiche avant de déployer.
+# Espace clé-valeur dédié à MineCarte (voir README.md). L'id n'est pas écrit
+# ici : le workflow de déploiement remplace ce marqueur par la variable de
+# dépôt CLOUDFLARE_KV_NAMESPACE_ID. Pour un déploiement local, remplace-le
+# temporairement par l'id (sans le committer).
 [[kv_namespaces]]
 binding = "SYNC_KV"
-id = "REMPLACER_PAR_L_ID_DU_NAMESPACE"
+id = "__CLOUDFLARE_KV_NAMESPACE_ID__"
 
 [vars]
 # Origine autorisée (schéma + hôte, sans chemin). "*" pour tout accepter.

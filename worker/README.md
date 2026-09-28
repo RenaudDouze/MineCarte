@@ -5,46 +5,48 @@ pousse et récupère un instantané JSON de ses POI et chemins, identifié par u
 code à 8 caractères (pas de compte, pas de mot de passe). Côté appli, la logique
 est dans `../js/sync.js`.
 
-## Mise en place (une seule fois)
+## Mise en place (une seule fois, sans ligne de commande)
 
-Il faut un compte Cloudflare (gratuit). Commandes à lancer depuis ce dossier
-(`worker/`) :
+Tout se configure dans le dashboard Cloudflare et dans les réglages du dépôt
+GitHub ; le déploiement est fait par GitHub Actions.
 
-```sh
-npm install
-npx wrangler login
-npx wrangler kv namespace create SYNC_KV
-```
+### 1. Côté Cloudflare (compte gratuit)
 
-La dernière commande affiche un `id` : colle-le dans `wrangler.toml` à la place
-de `REMPLACER_PAR_L_ID_DU_NAMESPACE`, puis déploie :
+1. **Espace de stockage KV** : *Storage & Databases* → *Workers KV* → *Create
+   instance*, nom `minecarte-sync`. Copie son **ID** (32 caractères).
+2. **Token d'API** : icône de profil → *Profile* → *API Tokens* → *Create Token*
+   → modèle **« Edit Cloudflare Workers »** → *Account Resources* : ton compte →
+   *Continue to summary* → *Create Token*. Copie le token (il ne sera plus
+   affiché).
+3. **Account ID** : visible sur la page d'accueil du compte ou dans la barre
+   latérale de *Workers & Pages* (*Account details*).
 
-```sh
-npm run deploy
-```
+Si c'est ton premier Worker, Cloudflare demande de choisir un sous-domaine
+`*.workers.dev` (déjà fait si tu as déployé PlusUn).
 
-Wrangler affiche l'URL du worker (`https://minecarte-sync.<ton-compte>.workers.dev`).
-Ajoute-la au dépôt GitHub comme **variable** (Settings → Secrets and variables →
-Actions → onglet *Variables* → New repository variable) :
+### 2. Côté GitHub (Settings → Secrets and variables → Actions)
 
-- `SYNC_WORKER_URL` = l'URL du worker, sans slash final.
+| Type | Nom | Valeur |
+| --- | --- | --- |
+| Secret | `CLOUDFLARE_API_TOKEN` | le token de l'étape 1.2 |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | l'Account ID de l'étape 1.3 |
+| Variable | `CLOUDFLARE_KV_NAMESPACE_ID` | l'ID du KV de l'étape 1.1 |
 
-Relance ensuite le déploiement GitHub Pages (onglet Actions → « Déploiement
-GitHub Pages » → Run workflow) : la section « Synchronisation cloud » apparaît
-dans les Réglages de la carte. Sans cette variable, elle reste masquée.
+### 3. Déployer
 
-## Déploiement automatique (optionnel)
+1. Onglet *Actions* → « Déploiement du worker de synchronisation » → *Run
+   workflow*. Le résumé du run affiche l'URL du worker
+   (`https://minecarte-sync.<sous-domaine>.workers.dev`).
+2. Ajoute la variable `SYNC_WORKER_URL` = cette URL (sans slash final).
+3. Relance « Déploiement GitHub Pages » (*Run workflow*) : la section
+   « Synchronisation cloud » apparaît dans les Réglages de la carte. Sans
+   `SYNC_WORKER_URL`, elle reste masquée.
 
-Le workflow `.github/workflows/worker-deploy.yml` lance les tests puis redéploie
-le worker à chaque changement sous `worker/` poussé sur `main`. Pour qu'il
-déploie, ajoute deux **secrets** au dépôt (Settings → Secrets and variables →
-Actions → New repository secret) :
+Ensuite, le worker est redéployé automatiquement à chaque changement sous
+`worker/` poussé sur `main`, et le site à chaque push sur `main`.
 
-- `CLOUDFLARE_API_TOKEN` : token créé avec le modèle « Edit Cloudflare Workers »
-  (dashboard Cloudflare → Profil → API Tokens) ;
-- `CLOUDFLARE_ACCOUNT_ID` : visible dans la barre latérale des pages Workers.
-
-Sans ces secrets, le workflow s'arrête après les tests.
+L'origine autorisée à appeler le worker (`ALLOWED_ORIGIN`) est définie dans
+`wrangler.toml` : `https://renauddouze.github.io`.
 
 ## Développement
 
@@ -52,6 +54,10 @@ Sans ces secrets, le workflow s'arrête après les tests.
 npm test       # tests (node --test, aucune dépendance)
 npm run dev    # worker en local (wrangler dev)
 ```
+
+Pour `npm run dev` ou un déploiement local (`npm run deploy`), remplace
+temporairement `__CLOUDFLARE_KV_NAMESPACE_ID__` dans `wrangler.toml` par l'ID du
+KV, sans committer ce changement.
 
 ## API et stockage
 
