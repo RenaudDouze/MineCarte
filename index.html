@@ -51,7 +51,7 @@
 
       <section class="panel" data-panel="settings">
         <h3>Affichage</h3>
-        <label class="check"><input type="checkbox" id="opt-terrain" checked> Fond généré</label>
+        <label class="check"><input type="checkbox" id="opt-generated"> Fond décoratif (fictif)</label>
         <label class="check"><input type="checkbox" id="opt-grid" checked> Grille (chunks / régions)</label>
         <label class="check"><input type="checkbox" id="opt-labels" checked> Noms des POI</label>
         <label class="check"><input type="checkbox" id="opt-links" checked> Traits entre POI liés</label>
@@ -61,7 +61,7 @@
           <input id="seed" type="text" placeholder="Graine" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
           <button type="submit">Appliquer</button>
         </form>
-        <p class="hint">Le fond est décoratif : il est généré à partir de la graine mais ne reproduit pas le vrai monde Minecraft.</p>
+        <p class="hint">La graine sert au fond décoratif : il invente des biomes à partir d'elle mais ne reproduit pas le vrai monde Minecraft. Par défaut, la carte affiche un fond neutre.</p>
 
         <section id="sync-section" hidden>
           <h3>Synchronisation cloud</h3>
@@ -118,6 +118,7 @@
         </span>
       </div>
       <div id="coords" class="coords"></div>
+      <div id="fake-note" class="fake-note" hidden title="Les biomes affichés sont inventés à partir de la graine. Désactivable dans Réglages → Fond décoratif.">Fond fictif — pas le terrain réel</div>
     </main>
   </div>
 
