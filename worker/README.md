@@ -42,8 +42,8 @@ Si c'est ton premier Worker, Cloudflare demande de choisir un sous-domaine
    « Synchronisation cloud » apparaît dans les Réglages de la carte. Sans
    `SYNC_WORKER_URL`, elle reste masquée.
 
-Ensuite, le worker est redéployé automatiquement à chaque changement sous
-`worker/` poussé sur `main`, et le site à chaque push sur `main`.
+Ensuite, après chaque CI verte sur `main`, le worker est redéployé s'il a
+changé, et le site à chaque fois.
 
 L'origine autorisée à appeler le worker (`ALLOWED_ORIGIN`) est définie dans
 `wrangler.toml` : `https://renauddouze.github.io`.
@@ -51,9 +51,11 @@ L'origine autorisée à appeler le worker (`ALLOWED_ORIGIN`) est définie dans
 ## Développement
 
 ```sh
-npm test       # tests (node --test, aucune dépendance)
 npm run dev    # worker en local (wrangler dev)
 ```
+
+Les tests du worker (`worker/test/`) tournent avec ceux du site, depuis la
+racine du dépôt : `npm test`, couverture et mutation à 100 %.
 
 Pour `npm run dev` ou un déploiement local (`npm run deploy`), remplace
 temporairement `__CLOUDFLARE_KV_NAMESPACE_ID__` dans `wrangler.toml` par l'ID du

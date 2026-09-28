@@ -5,3 +5,4 @@ reports/
 playwright-report/
 test-results/
 _site/
+_site-e2e/

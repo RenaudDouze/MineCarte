@@ -8,7 +8,7 @@
   },
   "scripts": {
     "serve": "node scripts/serve.mjs",
-    "lint": "oxlint --deny-warnings js worker/src tests e2e scripts",
+    "lint": "oxlint --deny-warnings js worker/src tests e2e scripts *.config.mjs *.config.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,7 +20,6 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@stryker-mutator/core": "^10.0.0",
-    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/leaflet": "^1.9.22",
     "@vitest/coverage-v8": "^5.0.2",
     "fake-indexeddb": "^6.2.5",
@@ -28,5 +27,8 @@
     "oxlint": "^1.86.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
