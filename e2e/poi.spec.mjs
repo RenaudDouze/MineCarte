@@ -3,11 +3,11 @@ import { test, expect } from './fixtures.mjs';
 test('créer un POI au clic droit, le retrouver après rechargement, le supprimer', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveAttribute('data-dim', 'overworld');
-  await expect(page.locator('#poi-list')).toContainText('Aucun POI');
+  await expect(page.locator('#poi-list')).toContainText('Aucun lieu');
 
   await page.locator('#map').click({ button: 'right', position: { x: 300, y: 200 } });
   await expect(page.locator('#context-menu')).toBeVisible();
-  await page.getByRole('button', { name: /Ajouter un POI ici/ }).click();
+  await page.getByRole('button', { name: /Ajouter un lieu ici/ }).click();
   await expect(page.locator('#poi-dialog')).toBeVisible();
   await page.locator('#poi-form [name="label"]').fill('Base principale');
   await page.locator('#poi-form [name="y"]').fill('72');
@@ -26,12 +26,12 @@ test('créer un POI au clic droit, le retrouver après rechargement, le supprime
   page.once('dialog', (d) => d.accept());
   await page.locator('.leaflet-popup-content').getByRole('button', { name: 'Supprimer' }).click();
   await expect(page.locator('.poi-label')).toHaveCount(0);
-  await expect(page.locator('#poi-list')).toContainText('Aucun POI');
+  await expect(page.locator('#poi-list')).toContainText('Aucun lieu');
 });
 
 test('POI liés : navigation vers un autre POI, même dans une autre dimension', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '+ POI' }).click();
+  await page.getByRole('button', { name: '+ Lieu' }).click();
   await page.locator('#poi-form [name="label"]').fill('Portail');
   await page.locator('#poi-form button[type="submit"]').click();
 
@@ -51,7 +51,7 @@ test('POI liés : navigation vers un autre POI, même dans une autre dimension',
 
 test('icône d’item choisie dans la liste', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '+ POI' }).click();
+  await page.getByRole('button', { name: '+ Lieu' }).click();
   await page.locator('#poi-form [name="label"]').fill('Mine');
   await page.locator('#icon-choose').click();
   await page.locator('#icon-search').fill('diam');

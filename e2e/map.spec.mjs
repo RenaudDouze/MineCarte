@@ -41,7 +41,7 @@ test('recherche de coordonnées puis création d’un chemin', async ({ page }) 
 
 test('export puis import JSON', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '+ POI' }).click();
+  await page.getByRole('button', { name: '+ Lieu' }).click();
   await page.locator('#poi-form [name="label"]').fill('À exporter');
   await page.locator('#poi-form button[type="submit"]').click();
 
@@ -55,8 +55,8 @@ test('export puis import JSON', async ({ page }) => {
 
   page.on('dialog', (d) => d.accept());
   await page.locator('#reset').click();
-  await expect(page.locator('#poi-list')).toContainText('Aucun POI');
+  await expect(page.locator('#poi-list')).toContainText('Aucun lieu');
   await page.locator('#import-file').setInputFiles({ name: 'carte.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
-  await expect(page.locator('#toast')).toHaveText('1 POI et 0 chemins importés.');
+  await expect(page.locator('#toast')).toHaveText('1 lieu(x) et 0 chemin(s) importés.');
   await expect(page.locator('#poi-list .item-name')).toHaveText(['À exporter']);
 });

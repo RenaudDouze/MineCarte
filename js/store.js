@@ -55,7 +55,7 @@
       ids.add(id);
       data.pois.push({
         id,
-        name: String(p.name || 'POI').slice(0, 100),
+        name: String(p.name || 'Lieu').slice(0, 100),
         color: color(p.color, '#e53935'),
         dim: dimension(p.dim),
         x: int(p.x, 0),
@@ -138,7 +138,7 @@
         poi = { id: uid() };
         this.data.pois.push(poi);
       }
-      poi.name = String(input.name ?? '').trim().slice(0, 100) || 'POI';
+      poi.name = String(input.name ?? '').trim().slice(0, 100) || 'Lieu';
       poi.color = color(input.color, '#e53935');
       poi.dim = dimension(input.dim);
       poi.x = int(input.x, 0);
