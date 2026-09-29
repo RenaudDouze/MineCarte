@@ -136,3 +136,62 @@ describe('extent', () => {
     expect(U().extent([poi(1, 1, 'nether')], [path([[0, 0], [1, 1]], 'end')], 'overworld')).toBeNull();
   });
 });
+
+describe('recherche', () => {
+  test('normalize : minuscules, sans accents ni espaces autour', () => {
+    expect(U().normalize('  Éléphant ÇA Où ')).toBe('elephant ca ou');
+    expect(U().normalize(42)).toBe('42');
+  });
+
+  test('parseCoords : X Z et X Y Z, séparateurs variés', () => {
+    const p = (t) => U().parseCoords(t);
+    expect(p('120 -40')).toEqual({ x: 120, y: null, z: -40 });
+    expect(p('120 64 -40')).toEqual({ x: 120, y: 64, z: -40 });
+    expect(p('-7 0 3')).toEqual({ x: -7, y: 0, z: 3 });
+    expect(p('120 ~ -40')).toEqual({ x: 120, y: null, z: -40 });
+    expect(p('1,2')).toEqual({ x: 1, y: null, z: 2 });
+    expect(p('1;2;3')).toEqual({ x: 1, y: 2, z: 3 });
+    expect(p('  5 ,\t6  ')).toEqual({ x: 5, y: null, z: 6 });
+    expect(p('10  20   30')).toEqual({ x: 10, y: 20, z: 30 });
+  });
+
+  test('parseCoords : décimales ramenées au bloc qui les contient', () => {
+    expect(U().parseCoords('1.7 64.99 -3.2')).toEqual({ x: 1, y: 64, z: -4 });
+    expect(U().parseCoords('-0.5 -0.5')).toEqual({ x: -1, y: null, z: -1 });
+    expect(U().parseCoords('12.25 7')).toEqual({ x: 12, y: null, z: 7 });
+    expect(U().parseCoords('7 -12.25')).toEqual({ x: 7, y: null, z: -13 });
+  });
+
+  test('parseCoords : tout le reste est refusé', () => {
+    for (const t of ['', '1', '1 2 3 4', 'a 1', '1 a', 'x1 2', '1 2x', '1 ~', '~ 1 2', '1 2 ~', '1. 2', '1 .5', '--1 2', '1-2', '1 - 2', 'Base 12', '1 2 3 a', '12']) {
+      expect([t, U().parseCoords(t)]).toEqual([t, null]);
+    }
+  });
+
+  const pois = [
+    { name: 'Village des plaines' }, { name: 'Élevage' }, { name: 'Base' }, { name: 'Grande base' }, { name: 'Mine' },
+  ];
+  const paths = [{ name: 'Route du village' }, { name: 'Tunnel' }, { name: 'Autoroute' }];
+
+  test('searchItems : lieux et chemins, accents et casse ignorés', () => {
+    const r = U().searchItems('VILL', pois, paths, 10);
+    expect(r).toEqual([
+      { type: 'poi', item: pois[0] },
+      { type: 'path', item: paths[0] },
+    ]);
+    expect(U().searchItems('elev', pois, paths, 10)).toEqual([{ type: 'poi', item: pois[1] }]);
+  });
+
+  test('searchItems : commence par la recherche d’abord, puis ordre alphabétique', () => {
+    expect(U().searchItems('base', pois, paths, 10).map((r) => r.item.name)).toEqual(['Base', 'Grande base']);
+    expect(U().searchItems('route', pois, paths, 10).map((r) => r.item.name)).toEqual(['Route du village', 'Autoroute']);
+    expect(U().searchItems('e', pois, paths, 10).map((r) => r.item.name))
+      .toEqual(['Élevage', 'Autoroute', 'Base', 'Grande base', 'Mine', 'Route du village', 'Tunnel', 'Village des plaines']);
+  });
+
+  test('searchItems : limite, recherche vide', () => {
+    expect(U().searchItems('e', pois, paths, 3).map((r) => r.item.name)).toEqual(['Élevage', 'Autoroute', 'Base']);
+    expect(U().searchItems('   ', pois, paths, 10)).toEqual([]);
+    expect(U().searchItems('zzz', pois, paths, 10)).toEqual([]);
+  });
+});

@@ -44,9 +44,11 @@ python3 -m http.server 8000
     `Entrée` pour terminer, `Retour arrière` pour annuler le dernier point, `Échap` pour abandonner.
   - Édition : glisser un sommet pour le déplacer, clic sur un segment pour insérer un point,
     clic droit sur un sommet pour le supprimer. « Prolonger » ajoute des points à la fin.
-- **Aller à** des coordonnées X / Z (Y optionnel) : depuis l'emplacement trouvé, créer un lieu
-  (coordonnées pré-remplies), commencer un chemin, ajouter le point au bout d'un chemin existant
-  ou au tracé en cours.
+- **Recherche globale** (champ en haut, raccourci `/`) : trouve un lieu ou un chemin par son nom
+  (sans tenir compte des accents ni de la casse, toutes dimensions confondues) ou des coordonnées
+  `X Z` / `X Y Z` (`~` pour ignorer Y). Flèches pour choisir, `Entrée` pour y aller. Depuis des
+  coordonnées trouvées : créer un lieu (coordonnées pré-remplies), commencer un chemin, ajouter le
+  point au bout d'un chemin existant ou au tracé en cours.
 - **Annuler / rétablir** : boutons ↶ ↷ en haut, ou `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Maj+Z`), pour les 50
   dernières modifications (y compris « Tout effacer » et un import). Une modification reçue d'un
   autre appareil vide l'historique, pour ne jamais défaire le travail des autres.
