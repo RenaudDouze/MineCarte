@@ -54,6 +54,10 @@ python3 -m http.server 8000
   autre appareil vide l'historique, pour ne jamais défaire le travail des autres.
 - **Tout afficher** : le bouton ⤢ sous le zoom cadre la carte sur tous les lieux et chemins de la
   dimension affichée.
+- **Sur téléphone** : le panneau s'ouvre avec ☰ et se referme en touchant la carte ; un appui
+  long sur la carte ouvre le menu (ajouter un lieu, commencer un chemin…). Au doigt, une mire
+  marque le centre de la carte, dont les coordonnées s'affichent en bas, et « + Lieu » y place le
+  nouveau lieu. Boutons et listes sont agrandis sur les écrans tactiles.
 - **URL partageable** (`#dimension/x/z/zoom`).
 - **Sauvegarde** automatique dans le navigateur (localStorage), **export et import JSON**.
 - **Synchronisation cloud par code** (Réglages) : « Créer un code » sur un appareil, puis

@@ -1435,6 +1435,38 @@ describe('panneau latéral', () => {
   });
 });
 
+describe('écrans tactiles', () => {
+  const pointer = (app, type) => app.map.getContainer().dispatchEvent(
+    Object.assign(new Event('pointerdown', { bubbles: true }), { pointerType: type }));
+
+  test('au doigt, les coordonnées suivent le centre ; à la souris, le curseur', async () => {
+    const app = await boot();
+    app.map.fire('mousemove', { latlng: ll(7, 8) });
+    app.map.setView(ll(40, -24), 0, { animate: false });
+    expect(text('#coords')).toContain('X 7  Z 8');
+    pointer(app, 'touch');
+    expect(document.body.classList.contains('touch')).toBe(true);
+    app.map.setView(ll(40, -24), 1, { animate: false });
+    expect(text('#coords')).toContain('X 40  Z -24');
+    pointer(app, 'mouse');
+    expect(document.body.classList.contains('touch')).toBe(false);
+    app.map.fire('mousemove', { latlng: ll(7, 8) });
+    app.map.setView(ll(90, 10), 1, { animate: false });
+    expect(text('#coords')).toContain('X 7  Z 8');
+  });
+
+  test('toucher la carte ferme le panneau sur petit écran seulement', async () => {
+    let app = await boot({ width: 500 });
+    document.body.classList.remove('sidebar-hidden');
+    app.map.fire('click', { latlng: ll(0, 0) });
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+    teardown();
+    app = await boot();
+    app.map.fire('click', { latlng: ll(0, 0) });
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(false);
+  });
+});
+
 const setFiles = (el, files) => {
   Object.defineProperty(el, 'files', { configurable: true, value: files });
   el.dispatchEvent(new Event('change', { bubbles: true }));

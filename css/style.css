@@ -196,8 +196,26 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
 /* --- Carte ---------------------------------------------------------------- */
 
 .map-wrap { flex: 1; position: relative; min-width: 0; }
-#map { position: absolute; inset: 0; background: #6f9a53; }
+/* Contexte d'empilement propre : les contrôles Leaflet (z-index 1000) restent sous le panneau. */
+#map { position: absolute; inset: 0; background: #6f9a53; isolation: isolate; }
 #map.drawing, #map.drawing .leaflet-interactive { cursor: crosshair; }
+
+.crosshair {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  z-index: 700;
+  pointer-events: none;
+  background:
+    linear-gradient(#fff, #fff) center / 2px 100% no-repeat,
+    linear-gradient(#fff, #fff) center / 100% 2px no-repeat;
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9));
+}
+body.touch .crosshair { display: block; }
 
 .coords {
   position: absolute;
@@ -353,6 +371,8 @@ dialog {
   border-radius: 10px;
   padding: 0;
   width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
 }
 dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
@@ -442,6 +462,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 /* --- Petits écrans --------------------------------------------------------- */
 
 @media (max-width: 720px) {
+  :root { --sidebar-w: min(100vw, 380px); }
   .topbar { gap: 8px; padding: 6px 8px; }
   .topbar h1 { display: none; }
   .search { margin-left: 0; width: 100%; }
@@ -450,4 +471,19 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   #sidebar { position: absolute; top: 0; bottom: 0; left: 0; box-shadow: 8px 0 24px rgba(0, 0, 0, 0.4); }
   .mode-banner { max-width: calc(100% - 20px); top: auto; bottom: 44px; font-size: 12.5px; }
   .coords { font-size: 11px; }
+}
+
+/* --- Écrans tactiles : cibles plus grandes -------------------------------------- */
+
+@media (pointer: coarse) {
+  button { min-height: 36px; }
+  .dim-btn { padding: 6px 12px; }
+  .icon-btn { min-width: 38px; }
+  /* 16 px : pas de zoom automatique d'iOS sur les champs. */
+  input[type="text"], input[type="number"], input[type="search"], select { font-size: 16px; padding: 7px 9px; }
+  .item { padding: 11px 8px; }
+  .search-item { padding: 11px 8px; }
+  .context-menu button { padding: 12px 14px; }
+  .tab { padding: 13px 6px; }
+  .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
 }

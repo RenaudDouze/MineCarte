@@ -792,8 +792,17 @@
     }
   });
 
+  // Au doigt, pas de survol : les coordonnées suivent le centre de la carte, marqué d'une mire.
+  map.getContainer().addEventListener('pointerdown', (e) => {
+    document.body.classList.toggle('touch', e.pointerType === 'touch');
+  });
+  map.on('move', () => {
+    if (document.body.classList.contains('touch')) updateCoords(map.getCenter());
+  });
+
   map.on('click', (e) => {
     hideContextMenu();
+    closeSidebarOnMobile();
     if (state.mode === 'draw') {
       const { x, z } = fromLatLng(e.latlng);
       addDrawPoint(x, z);
