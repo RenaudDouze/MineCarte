@@ -61,6 +61,38 @@
     return null;
   }
 
+  // Texte comparable : minuscules, sans accents ni espaces autour.
+  function normalize(text) {
+    return String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  }
+
+  // Coordonnées tapées dans la recherche : « X Z » ou « X Y Z » (Y peut être
+  // « ~ »), séparées par des espaces, virgules ou points-virgules. Les
+  // décimales (copiées de l'écran F3) donnent le bloc qui les contient.
+  // Renvoie { x, y, z } (y null si absent) ou null.
+  const COORDS_RE = /^(-?\d+(?:\.\d+)?)[\s,;]+(?:(~|-?\d+(?:\.\d+)?)[\s,;]+)?(-?\d+(?:\.\d+)?)$/;
+  function parseCoords(text) {
+    const m = String(text).trim().match(COORDS_RE);
+    if (!m) return null;
+    const block = (v) => Math.floor(Number(v));
+    return { x: block(m[1]), y: m[2] && m[2] !== '~' ? block(m[2]) : null, z: block(m[3]) };
+  }
+
+  // Lieux et chemins dont le nom contient la recherche (sans tenir compte des
+  // accents ni de la casse) : ceux dont le nom commence par elle d'abord, puis
+  // par ordre alphabétique ; au plus `limit` résultats.
+  function searchItems(query, pois, paths, limit) {
+    const q = normalize(query);
+    if (!q) return [];
+    const rank = (item) => (normalize(item.name).startsWith(q) ? 0 : 1);
+    const match = (type, list) => list
+      .filter((item) => normalize(item.name).includes(q))
+      .map((item) => ({ type, item }));
+    return [...match('poi', pois), ...match('path', paths)]
+      .sort((a, b) => rank(a.item) - rank(b.item) || a.item.name.localeCompare(b.item.name, 'fr'))
+      .slice(0, limit);
+  }
+
   // Blocs extrêmes des lieux et des points de chemins d'une dimension :
   // { minX, minZ, maxX, maxZ }, ou null si la dimension est vide.
   function extent(pois, paths, dim) {
@@ -97,5 +129,5 @@
     return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   }
 
-  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, nearestSegment, segmentDistance };
+  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, normalize, parseCoords, searchItems, nearestSegment, segmentDistance };
 })(window);

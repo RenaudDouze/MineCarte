@@ -1091,15 +1091,14 @@ describe('clavier', () => {
 
 describe('recherche de coordonnées', () => {
   const go = (x, z, y = '') => {
-    const f = $('#goto').elements;
-    f.x.value = x; f.y.value = y; f.z.value = z;
-    submit($('#goto'));
+    input($('#global-search'), y === '' ? `${x} ${z}` : `${x} ${y} ${z}`);
+    submit($('#search'));
   };
 
-  test('valeurs arrondies, champ vide = 0 (les champs requis l’empêchent)', async () => {
+  test('décimales : le bloc qui les contient', async () => {
     await boot();
-    go('1e400', '2.6');
-    expect(popup().querySelector('.popup-title').textContent).toBe('📌 X 0 · Z 3');
+    go('-0.5', '2.6');
+    expect(popup().querySelector('.popup-title').textContent).toBe('📌 X -1 · Z 2');
   });
 
   test('emplacement avec hauteur : repère, conversion, POI', async () => {
@@ -1173,6 +1172,110 @@ describe('recherche de coordonnées', () => {
     expect(popup()).toBeNull();
     expect(app.store.getPath('s').points).toEqual([[0, 0], [30, 40], [7, 8]]);
     expect(text('#toast')).toBe('Point ajouté à « Sentier ».');
+  });
+});
+
+describe('recherche globale', () => {
+  const search = () => $('#global-search');
+  const results = () => $$('#search-results li');
+  const type = (value) => input(search(), value);
+  const data = () => withData({
+    pois: [
+      POI({ id: 'a', name: 'Village', x: 10, z: 20 }),
+      POI({ id: 'n', name: 'Forteresse du village', dim: 'nether', x: 5, z: 6 }),
+    ],
+    paths: [PATH({ id: 'r', name: 'Route du village', dim: 'end', points: [[0, 0], [100, 0], [300, 0]] })],
+  });
+
+  test('propositions : lieux et chemins de toutes les dimensions', async () => {
+    await data();
+    type('vill');
+    expect($('#search-results').hidden).toBe(false);
+    expect(results().map((li) => li.querySelector('.item-name').textContent)).toEqual(['Village', 'Forteresse du village', 'Route du village']);
+    expect(results().map((li) => li.querySelector('.item-sub').textContent)).toEqual([
+      'Overworld · X 10 · Z 20',
+      'Nether · X 5 · Z 6',
+      'End · chemin de 300 blocs',
+    ]);
+    expect(results()[0].className).toBe('search-item active');
+    expect(results()[0].getAttribute('aria-selected')).toBe('true');
+    expect(results()[1].getAttribute('aria-selected')).toBe('false');
+    expect(results()[0].getAttribute('role')).toBe('option');
+    expect(results()[2].querySelector('.swatch-line').getAttribute('style')).toBe('background:#43a047');
+  });
+
+  test('coordonnées reconnues en premier', async () => {
+    await withData({ pois: [POI({ id: 'a', name: '120 ans' })] });
+    type('120 64 -40');
+    expect(results().map((li) => li.querySelector('.item-name').textContent)).toEqual(['Aller à X 120 · Y 64 · Z -40']);
+    type('120');
+    expect(results().map((li) => li.querySelector('.item-name').textContent)).toEqual(['120 ans']);
+    type('7 8');
+    expect(results()[0].querySelector('.item-name').textContent).toBe('Aller à X 7 · Z 8');
+    expect(results()[0].querySelector('.item-sub').textContent).toBe('Overworld');
+    expect(results()[0].querySelector('.search-icon').textContent).toBe('📌');
+  });
+
+  test('flèches, Entrée : aller au résultat choisi, dans sa dimension', async () => {
+    const app = await data();
+    type('vill');
+    key('ArrowDown', {}, search());
+    expect(results()[1].className).toBe('search-item active');
+    key('ArrowDown', {}, search());
+    key('ArrowDown', {}, search());
+    expect(results()[0].className).toBe('search-item active');
+    expect(key('ArrowUp', {}, search()).defaultPrevented).toBe(true);
+    expect(results()[2].className).toBe('search-item active');
+    key('ArrowUp', {}, search());
+    submit($('#search'));
+    expect(app.state.dim).toBe('nether');
+    expect(popup().querySelector('.popup-title').textContent).toBe('Forteresse du village');
+    expect(search().value).toBe('');
+    expect($('#search-results').hidden).toBe(true);
+  });
+
+  test('clic sur un chemin d’une autre dimension', async () => {
+    const app = await data();
+    type('route');
+    const li = results()[0];
+    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    li.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+    li.click();
+    expect(app.state.dim).toBe('end');
+    expect(popup().querySelector('.popup-title').textContent).toBe('Route du village');
+  });
+
+  test('aucun résultat, champ vidé, Échap, perte de focus', async () => {
+    await data();
+    type('zzz');
+    expect(results().map((li) => [li.className, li.textContent])).toEqual([['empty', 'Aucun résultat.']]);
+    // Entrée sans résultat : rien.
+    submit($('#search'));
+    expect(search().value).toBe('zzz');
+    key('ArrowDown', {}, search());
+    type('   ');
+    expect($('#search-results').hidden).toBe(true);
+    type('vill');
+    key('a', {}, search());
+    expect($('#search-results').hidden).toBe(false);
+    key('Escape', {}, search());
+    expect(search().value).toBe('');
+    expect($('#search-results').hidden).toBe(true);
+    type('vill');
+    search().dispatchEvent(new Event('blur'));
+    expect($('#search-results').hidden).toBe(true);
+    // Retour dans le champ : les propositions reviennent.
+    search().dispatchEvent(new Event('focus'));
+    expect($('#search-results').hidden).toBe(false);
+  });
+
+  test('« / » place le curseur dans la recherche', async () => {
+    await boot();
+    expect(key('/').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(search());
+    // Dans un champ, « / » reste un caractère.
+    expect(key('/', {}, search()).defaultPrevented).toBe(false);
   });
 });
 

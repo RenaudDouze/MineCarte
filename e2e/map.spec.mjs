@@ -13,9 +13,8 @@ test('dimensions : bouton, ancre d’URL et coordonnées converties', async ({ p
 
 test('recherche de coordonnées puis création d’un chemin', async ({ page }) => {
   await page.goto('/');
-  await page.locator('#goto [name="x"]').fill('120');
-  await page.locator('#goto [name="z"]').fill('-40');
-  await page.locator('#goto button[type="submit"]').click();
+  await page.locator('#global-search').fill('120 -40');
+  await page.locator('#global-search').press('Enter');
   await expect(page.locator('.leaflet-popup-content .popup-title')).toHaveText('📌 X 120 · Z -40');
   await page.getByRole('button', { name: /Commencer un chemin/ }).click();
   await expect(page.locator('#mode-banner')).toBeVisible();
@@ -72,4 +71,17 @@ test('bouton « tout afficher » : cadre les lieux et chemins de la dimension', 
   await page.getByRole('button', { name: 'Afficher tous les lieux et chemins' }).click();
   await expect(page.locator('.poi-label', { hasText: 'Nord' })).toBeInViewport();
   await expect(page.locator('.poi-label', { hasText: 'Sud' })).toBeInViewport();
+});
+
+test('recherche globale : un lieu d’une autre dimension', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    window.MineCarte.store.savePoi({ name: 'Forteresse', dim: 'nether', x: 40, z: -12 });
+  });
+  await page.keyboard.press('/');
+  await page.keyboard.type('forter');
+  await expect(page.locator('#search-results .item-name')).toHaveText(['Forteresse']);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('body')).toHaveAttribute('data-dim', 'nether');
+  await expect(page.locator('.leaflet-popup-content .popup-title')).toHaveText('Forteresse');
 });

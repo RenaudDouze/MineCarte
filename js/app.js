@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, nearestSegment } = Utils;
+  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, parseCoords, searchItems, nearestSegment } = Utils;
   const OPTIONS_KEY = 'minecarte:options';
 
   const store = new Store();
@@ -564,9 +564,9 @@
     L.popup({ minWidth: 220 }).setLatLng(latlng).setContent(content).openOn(map);
   }
 
-  // Appelé depuis la liste, qui ne montre que les chemins de la dimension affichée.
   function focusPath(id) {
     const path = store.getPath(id);
+    if (path.dim !== state.dim) setDimension(path.dim);
     const bounds = L.latLngBounds(path.points.map(([x, z]) => toLatLng(x, z)));
     map.fitBounds(bounds.pad(0.2), { maxZoom: 2, animate: false });
     const mid = path.points[Math.floor(path.points.length / 2)];
@@ -856,6 +856,9 @@
     } else if ((e.key === 'Backspace' || (e.key === 'z' && (e.ctrlKey || e.metaKey))) && state.mode === 'draw') {
       e.preventDefault();
       undoDrawPoint();
+    } else if (e.key === '/') {
+      e.preventDefault();
+      searchInput.focus();
     } else if ((e.ctrlKey || e.metaKey) && !state.mode) {
       // Ctrl+Z : annuler ; Ctrl+Y ou Ctrl+Maj+Z : rétablir.
       const k = e.key.toLowerCase();
@@ -894,16 +897,102 @@
     btn.addEventListener('click', () => setDimension(btn.dataset.dim));
   });
 
-  $('#goto').addEventListener('submit', (e) => {
-    e.preventDefault();
-    // Champs type="number" (x et z requis) : le navigateur n'y laisse qu'un
-    // nombre fini ou une chaîne vide.
-    const f = e.target.elements;
-    const x = Math.round(Number(f.x.value));
-    const z = Math.round(Number(f.z.value));
-    const y = f.y.value === '' ? null : Math.round(Number(f.y.value));
+  // --- Recherche globale : lieux, chemins et coordonnées ------------------------------
+
+  const searchInput = $('#global-search');
+  const searchResults = $('#search-results');
+  let searchChoices = [];
+  let searchActive = 0;
+
+  function goTo(x, z, y) {
     map.setView(toLatLng(x, z), Math.max(map.getZoom(), 1));
     openLocationPopup(x, z, y);
+  }
+
+  const searchLine = (icon, name, sub) => [icon, h('span', { class: 'item-main' },
+    h('span', { class: 'item-name' }, name),
+    h('span', { class: 'item-sub' }, sub))];
+
+  // Propositions : les coordonnées reconnues, puis les lieux et chemins.
+  function searchEntries(query) {
+    const entries = [];
+    const c = parseCoords(query);
+    if (c) {
+      entries.push({
+        content: searchLine(h('span', { class: 'search-icon' }, '📌'),
+          `Aller à X ${c.x}${c.y === null ? '' : ` · Y ${c.y}`} · Z ${c.z}`, DIM_LABELS[state.dim]),
+        run: () => goTo(c.x, c.z, c.y),
+      });
+    }
+    for (const { type, item } of searchItems(query, store.data.pois, store.data.paths, 8)) {
+      entries.push(type === 'poi'
+        ? {
+          content: searchLine(poiDot(item), item.name, `${DIM_LABELS[item.dim]} · X ${item.x} · Z ${item.z}`),
+          run: () => focusPoi(item.id),
+        }
+        : {
+          content: searchLine(h('span', { class: 'swatch-line', style: `background:${item.color}` }), item.name,
+            `${DIM_LABELS[item.dim]} · chemin de ${fmt(pathLength(item.points))} blocs`),
+          run: () => focusPath(item.id),
+        });
+    }
+    return entries;
+  }
+
+  function highlightSearch() {
+    [...searchResults.children].forEach((li, i) => {
+      li.classList.toggle('active', i === searchActive);
+      li.setAttribute('aria-selected', String(i === searchActive));
+    });
+  }
+
+  function closeSearch() {
+    searchResults.hidden = true;
+    searchChoices = [];
+  }
+
+  function renderSearch() {
+    if (!searchInput.value.trim()) return closeSearch();
+    searchChoices = searchEntries(searchInput.value);
+    searchActive = 0;
+    searchResults.replaceChildren(...searchChoices.map((choice, i) => h('li', {
+      class: 'search-item',
+      role: 'option',
+      // Garder le focus dans le champ : le clic arrive avant la perte de focus.
+      onmousedown: (e) => e.preventDefault(),
+      onclick: () => chooseSearch(i),
+    }, choice.content)));
+    highlightSearch();
+    if (!searchChoices.length) searchResults.append(h('li', { class: 'empty' }, 'Aucun résultat.'));
+    searchResults.hidden = false;
+  }
+
+  function chooseSearch(i) {
+    const choice = searchChoices[i];
+    if (!choice) return;
+    searchInput.value = '';
+    closeSearch();
+    searchInput.blur();
+    choice.run();
+  }
+
+  searchInput.addEventListener('input', renderSearch);
+  searchInput.addEventListener('focus', renderSearch);
+  searchInput.addEventListener('blur', closeSearch);
+  searchInput.addEventListener('keydown', (e) => {
+    const n = searchChoices.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      searchActive = n ? (searchActive + (e.key === 'ArrowDown' ? 1 : n - 1)) % n : 0;
+      highlightSearch();
+    } else if (e.key === 'Escape') {
+      searchInput.value = '';
+      closeSearch();
+    }
+  });
+  $('#search').addEventListener('submit', (e) => {
+    e.preventDefault();
+    chooseSearch(searchActive);
   });
 
   // Emplacement recherché : repère temporaire + actions (POI, chemin).

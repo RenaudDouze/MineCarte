@@ -21,11 +21,9 @@
       <button type="button" data-dim="nether" class="dim-btn dim-nether">Nether</button>
       <button type="button" data-dim="end" class="dim-btn dim-end">End</button>
     </nav>
-    <form id="goto" class="goto" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
-      <label>X <input name="x" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
-      <label>Y <input name="y" type="number" step="1" placeholder="opt." title="Optionnel : repris dans le lieu créé" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
-      <label>Z <input name="z" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
-      <button type="submit">Aller</button>
+    <form id="search" class="search" role="search" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
+      <input id="global-search" type="search" placeholder="Lieu, chemin ou coordonnées « X Z »…" title="Rechercher un lieu, un chemin ou des coordonnées (raccourci : /)" aria-label="Rechercher un lieu, un chemin ou des coordonnées" aria-controls="search-results" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
+      <ul id="search-results" class="search-results" role="listbox" hidden></ul>
     </form>
   </header>
 
@@ -97,7 +95,7 @@
         <ul class="help">
           <li><b>Clic droit</b> sur la carte : ajouter un lieu, démarrer un chemin, copier les coordonnées.</li>
           <li><b>Clic</b> sur un lieu : détails, liens et actions.</li>
-          <li><b>Aller à</b> (X, Y optionnel, Z) : depuis l'emplacement trouvé, créer un lieu, commencer un chemin, ajouter le point au bout d'un chemin ou au tracé en cours.</li>
+          <li><b>Recherche</b> (<kbd>/</kbd>) : un nom de lieu ou de chemin, ou des coordonnées « X Z » / « X Y Z ». Depuis des coordonnées : depuis l'emplacement trouvé, créer un lieu, commencer un chemin, ajouter le point au bout d'un chemin ou au tracé en cours.</li>
           <li>Tracé : clic pour ajouter un point, clic sur un lieu pour s'y accrocher, <b>double-clic</b> ou <b>Entrée</b> pour terminer, <b>Retour arrière</b> pour annuler le dernier point, <b>Échap</b> pour abandonner.</li>
           <li>Édition d'un tracé : glissez les sommets, clic sur un segment pour insérer un point, clic droit sur un sommet pour le supprimer.</li>
         </ul>
