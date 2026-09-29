@@ -26,6 +26,9 @@ python3 -m http.server 8000
 - **Lieux** : ajout (bouton « + Lieu » ou clic droit sur la carte), modification et suppression.
   Chaque lieu a un nom, une couleur, une dimension et des coordonnées X, Y, Z. Seuls X et Z
   servent au placement, Y est affiché pour information.
+- **Catégories** : un lieu peut être classé (Base, Ferme, Portail, Village, Mine, Structure,
+  Ressource). Des pastilles au-dessus de la liste masquent ou affichent chaque catégorie, sur la
+  carte comme dans la liste (réglage gardé dans le navigateur).
 - **Icônes d'items** : un lieu peut afficher l'icône d'un item Minecraft (recherche en anglais
   parmi ~1 650 items). Les textures, propriété de Mojang, ne sont pas incluses dans le dépôt :
   elles sont chargées depuis le paquet npm [`minecraft-textures`](https://github.com/destruc7i0n/minecraft-textures)
@@ -107,7 +110,8 @@ Coordonnées : la carte utilise `L.CRS.Simple`, avec 1 pixel = 1 bloc au zoom 0,
   "seed": "minecarte",
   "pois": [
     { "id": "…", "name": "Base", "color": "#e53935", "dim": "overworld",
-      "x": 120, "y": 64, "z": -340, "icon": "minecraft:diamond_sword", "links": ["…"] }
+      "x": 120, "y": 64, "z": -340, "icon": "minecraft:diamond_sword", "category": "base",
+      "links": ["…"] }
   ],
   "paths": [
     { "id": "…", "name": "Route", "color": "#ffeb3b", "dim": "nether", "weight": 4,

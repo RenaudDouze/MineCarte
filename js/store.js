@@ -34,6 +34,21 @@
     return Array.isArray(value) ? value.filter((v) => v && typeof v === 'object') : [];
   }
 
+  // Catégories de lieux ; « » (chaîne vide) = sans catégorie.
+  const CATEGORIES = [
+    { id: 'base', emoji: '🏠', label: 'Base' },
+    { id: 'farm', emoji: '🌾', label: 'Ferme' },
+    { id: 'portal', emoji: '🌀', label: 'Portail' },
+    { id: 'village', emoji: '🏘️', label: 'Village' },
+    { id: 'mine', emoji: '⛏️', label: 'Mine' },
+    { id: 'structure', emoji: '🏛️', label: 'Structure' },
+    { id: 'resource', emoji: '💎', label: 'Ressource' },
+  ];
+
+  function category(value) {
+    return CATEGORIES.some((c) => c.id === value) ? value : '';
+  }
+
   function dimension(value) {
     return DIMENSIONS.includes(value) ? value : 'overworld';
   }
@@ -62,6 +77,7 @@
         y: int(p.y, 64),
         z: int(p.z, 0),
         icon: icon(p.icon),
+        category: category(p.category),
       });
       rawLinks.set(id, p.links);
     }
@@ -145,6 +161,7 @@
       poi.y = int(input.y, 64);
       poi.z = int(input.z, 0);
       poi.icon = icon(input.icon);
+      poi.category = category(input.category);
 
       const wanted = new Set(Array.isArray(input.links) ? input.links.filter((l) => l !== poi.id && this.getPoi(l)) : []);
       for (const other of this.data.pois) {
@@ -203,5 +220,6 @@
   }
 
   global.Store = Store;
+  global.Store.CATEGORIES = CATEGORIES;
   global.DIMENSIONS = DIMENSIONS;
 })(window);

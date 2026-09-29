@@ -39,6 +39,7 @@
           <button type="button" id="add-poi" class="primary">+ Lieu</button>
         </div>
         <label class="check"><input type="checkbox" id="poi-all-dims"> Toutes les dimensions</label>
+        <div id="cat-filter" class="cat-filter" hidden></div>
         <ul id="poi-list" class="list"></ul>
       </section>
 
@@ -120,6 +121,7 @@
       <h2 id="poi-dialog-title">Nouveau lieu</h2>
       <input type="hidden" name="id">
       <label>Nom <input name="label" type="text" maxlength="100" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+      <label>Catégorie <select name="category"></select></label>
       <div class="field">
         <span>Couleur</span>
         <div class="color-row">

@@ -60,3 +60,21 @@ test('icône d’item choisie dans la liste', async ({ page }) => {
   await page.locator('#poi-form button[type="submit"]').click();
   await expect(page.locator('.poi-pin-item img')).toBeVisible();
 });
+
+test('catégories : choix dans le dialogue et filtre', async ({ page }) => {
+  await page.goto('/');
+  for (const [name, category] of [['Maison', 'base'], ['Champ de blé', 'farm']]) {
+    await page.getByRole('button', { name: '+ Lieu' }).click();
+    await page.locator('#poi-form [name="label"]').fill(name);
+    await page.locator('#poi-form [name="category"]').selectOption(category);
+    await page.locator('#poi-form button[type="submit"]').click();
+  }
+  await expect(page.locator('#poi-list .item-sub').first()).toContainText('🌾 Ferme');
+  await page.locator('.cat-chip', { hasText: 'Ferme' }).click();
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Maison']);
+  await expect(page.locator('.poi-label', { hasText: 'Champ de blé' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Maison']);
+  await page.locator('.cat-chip', { hasText: 'Ferme' }).click();
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Champ de blé', 'Maison']);
+});

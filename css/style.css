@@ -280,6 +280,11 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
 .leaflet-popup-content { margin: 12px 14px; font-size: 13px; }
 .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
 .popup-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; margin-bottom: 6px; padding-right: 14px; }
+.popup-cat { font-size: 12.5px; color: var(--muted); margin: -2px 0 4px; }
+.cat-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.cat-filter[hidden] { display: none; }
+.cat-chip { border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
+.cat-chip.off { opacity: 0.45; text-decoration: line-through; }
 .popup-coords { display: flex; gap: 10px; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .popup-coords .y { color: var(--muted); }
 .popup-sub { color: var(--muted); font-size: 12px; margin-top: 4px; }

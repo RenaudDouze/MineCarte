@@ -54,12 +54,12 @@ describe('chargement', () => {
 describe('nettoyage des POI', () => {
   test('valeurs par défaut et conversions', () => {
     const [p] = load({ pois: [{ id: 'a' }] }).pois;
-    expect(p).toEqual({ id: 'a', name: 'Lieu', color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '', links: [] });
+    expect(p).toEqual({ id: 'a', name: 'Lieu', color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '', category: '', links: [] });
   });
 
   test('champs valides conservés, nombres arrondis, couleur en minuscules', () => {
-    const [p] = load({ pois: [{ id: 'a', name: 'Base', color: '#ABCDEF', dim: 'nether', x: '12.6', y: -3.4, z: 7, icon: 'minecraft:diamond_sword' }] }).pois;
-    expect(p).toEqual({ id: 'a', name: 'Base', color: '#abcdef', dim: 'nether', x: 13, y: -3, z: 7, icon: 'minecraft:diamond_sword', links: [] });
+    const [p] = load({ pois: [{ id: 'a', name: 'Base', color: '#ABCDEF', dim: 'nether', x: '12.6', y: -3.4, z: 7, icon: 'minecraft:diamond_sword', category: 'farm' }] }).pois;
+    expect(p).toEqual({ id: 'a', name: 'Base', color: '#abcdef', dim: 'nether', x: 13, y: -3, z: 7, icon: 'minecraft:diamond_sword', category: 'farm', links: [] });
   });
 
   test('valeurs invalides remplacées', () => {
@@ -73,6 +73,24 @@ describe('nettoyage des POI', () => {
     const poi = store.savePoi({ icon: { toString: () => 'minecraft:bed' } });
     expect(poi.icon).toBe('');
     expect(load({ pois: [{ id: 'a', dim: 'end' }] }).pois[0].dim).toBe('end');
+  });
+
+  test('catégories : identifiants connus seulement', () => {
+    const cat = (value) => load({ pois: [{ id: 'a', category: value }] }).pois[0].category;
+    for (const c of Store.CATEGORIES) expect(cat(c.id)).toBe(c.id);
+    expect(cat('Base')).toBe('');
+    expect(cat('inconnue')).toBe('');
+    expect(cat(null)).toBe('');
+    expect(cat({ toString: () => 'base' })).toBe('');
+    expect(Store.CATEGORIES.map((c) => [c.id, c.emoji, c.label])).toEqual([
+      ['base', '🏠', 'Base'],
+      ['farm', '🌾', 'Ferme'],
+      ['portal', '🌀', 'Portail'],
+      ['village', '🏘️', 'Village'],
+      ['mine', '⛏️', 'Mine'],
+      ['structure', '🏛️', 'Structure'],
+      ['resource', '💎', 'Ressource'],
+    ]);
   });
 
   test('nom limité à 100 caractères', () => {
@@ -178,13 +196,13 @@ describe('Store', () => {
   });
 
   test('POI : création, nettoyage des champs, liens symétriques', () => {
-    const a = store.savePoi({ name: '  Base  ', color: '#FFFFFF', dim: 'nether', x: '1.4', y: 'x', z: -2.6, icon: 'minecraft:bed' });
-    expect(a).toEqual({ id: a.id, name: 'Base', color: '#ffffff', dim: 'nether', x: 1, y: 64, z: -3, icon: 'minecraft:bed', links: [] });
+    const a = store.savePoi({ name: '  Base  ', color: '#FFFFFF', dim: 'nether', x: '1.4', y: 'x', z: -2.6, icon: 'minecraft:bed', category: 'mine' });
+    expect(a).toEqual({ id: a.id, name: 'Base', color: '#ffffff', dim: 'nether', x: 1, y: 64, z: -3, icon: 'minecraft:bed', category: 'mine', links: [] });
     expect(a.id).toMatch(/^[0-9a-z]{9,}$/);
     expect(store.getPoi(a.id)).toBe(a);
     const b = store.savePoi({ name: '   ', links: [a.id, 'inconnu'] });
     expect(b.name).toBe('Lieu');
-    expect(b).toMatchObject({ color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '' });
+    expect(b).toMatchObject({ color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '', category: '' });
     expect(b.links).toEqual([a.id]);
     expect(a.links).toEqual([b.id]);
     expect(store.savePoi({}).name).toBe('Lieu');
@@ -192,6 +210,12 @@ describe('Store', () => {
     expect(store.savePoi({ name: 'X', links: 'pas un tableau' }).links).toEqual([]);
     expect(store.savePoi({ name: 'y'.repeat(120) }).name).toHaveLength(100);
     expect(calls).toHaveLength(6);
+  });
+
+  test('POI : catégorie nettoyée à l’enregistrement', () => {
+    const a = store.savePoi({ name: 'A', category: 'portal' });
+    expect(a.category).toBe('portal');
+    expect(store.savePoi({ id: a.id, name: 'A', category: 'x' }).category).toBe('');
   });
 
   test('POI : modification des liens (ajout, retrait, pas d’auto-lien)', () => {
