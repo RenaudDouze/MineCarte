@@ -2,7 +2,7 @@
 import { describe, test, expect, vi, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import worker, {
-  kvKey, blobKey, referencedHashes, isValidPushRequest, MAX_BODY_BYTES, MAX_BLOB_BYTES, KV_TTL_SECONDS,
+  kvKey, blobKey, referencedHashes, isValidPushRequest, MAX_BODY_BYTES, KV_TTL_SECONDS,
 } from '../src/index.js';
 import { generateSyncCode, isValidSyncCode, normalizeSyncCode, ALPHABET, CODE_LENGTH } from '../src/code.js';
 
@@ -22,11 +22,10 @@ function memoryKV() {
 }
 
 const env = (extra = {}) => ({ SYNC_KV: memoryKV(), ALLOWED_ORIGIN: 'https://renauddouze.github.io/MineCarte', ...extra });
-const call = (e, method, path, body, headers) => worker.fetch(new Request(`https://w.example${path}`, {
-  method,
-  headers,
-  body: body === undefined ? undefined : typeof body === 'string' || body instanceof Uint8Array ? body : JSON.stringify(body),
-}), e);
+const call = (e, method, path, body) => worker.fetch(new Request(
+  `https://w.example${path}`,
+  body === undefined ? { method } : { method, body: typeof body === 'string' ? body : JSON.stringify(body) },
+), e);
 const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 const create = async (e) => (await (await call(e, 'POST', '/api/sync')).json()).code;
 
@@ -74,7 +73,6 @@ describe('fonctions exportées', () => {
 
   test('constantes', () => {
     expect(MAX_BODY_BYTES).toBe(512 * 1024);
-    expect(MAX_BLOB_BYTES).toBe(20 * 1024 * 1024);
     expect(KV_TTL_SECONDS).toBe(180 * 24 * 3600);
   });
 
@@ -142,12 +140,10 @@ describe('routage', () => {
       ['GET', '/api/sync', 405, 'Method not allowed'],
       ['DELETE', `/api/sync/${code}`, 405, 'Method not allowed'],
       ['GET', `/api/sync/${code}/x`, 404, 'Not found'],
-      ['GET', `/api/sync/${code}/autre/${'a'.repeat(64)}`, 404, 'Not found'],
-      ['GET', `/api/sync/${code}/blob/${'a'.repeat(64)}/x`, 404, 'Not found'],
-      ['DELETE', `/api/sync/${code}/blob/${'a'.repeat(64)}`, 405, 'Method not allowed'],
+      // Anciennes routes des images de fonds (fonctionnalité retirée).
+      ['GET', `/api/sync/${code}/blob/${'a'.repeat(64)}`, 404, 'Not found'],
+      ['PUT', `/api/sync/${code}/blob/${'a'.repeat(64)}`, 404, 'Not found'],
       ['GET', '/api/sync/0000', 400, 'Code invalide.'],
-      ['GET', `/api/sync/0000/blob/${'a'.repeat(64)}`, 400, 'Code ou empreinte invalide.'],
-      ['GET', `/api/sync/${code}/blob/abc`, 400, 'Code ou empreinte invalide.'],
     ];
     for (const [method, path, status, error] of cases) {
       const res = await call(e, method, path);
@@ -248,86 +244,20 @@ describe('codes de synchronisation', () => {
   });
 });
 
-describe('images des fonds', () => {
-  const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
-  const hash = sha(png);
-
-  test('envoi puis lecture, avec type et cache immuable', async () => {
-    const e = env();
-    const code = await create(e);
-    let res = await call(e, 'PUT', `/api/sync/${code}/blob/${hash.toUpperCase()}`, png, { 'Content-Type': 'Image/PNG ; charset=binary' });
-    expect(res.status).toBe(201);
-    expect(await res.json()).toEqual({ hash });
-    expect(e.SYNC_KV.log.filter((op) => op[0] === 'put').at(-1)).toEqual(['put', `blob:${code}:${hash}`, { metadata: { type: 'image/png' } }]);
-    res = await call(e, 'GET', `/api/sync/${code.toLowerCase()}/blob/${hash}`);
-    expect(res.status).toBe(200);
-    expect(Object.fromEntries(res.headers)).toMatchObject({
-      'content-type': 'image/png',
-      'cache-control': 'private, max-age=31536000, immutable',
-      'access-control-allow-origin': 'https://renauddouze.github.io',
-    });
-    expect(new Uint8Array(await res.arrayBuffer())).toEqual(png);
-    expect(e.SYNC_KV.log.at(-1)).toEqual(['getWithMetadata', `blob:${code}:${hash}`, { type: 'arrayBuffer' }]);
-  });
-
-  test('JPEG et WebP acceptés, déjà présente : pas de réécriture', async () => {
-    const e = env();
-    const code = await create(e);
-    const jpg = new Uint8Array([1]);
-    expect((await call(e, 'PUT', `/api/sync/${code}/blob/${sha(jpg)}`, jpg, { 'Content-Type': 'image/jpeg' })).status).toBe(201);
-    const webp = new Uint8Array([2]);
-    expect((await call(e, 'PUT', `/api/sync/${code}/blob/${sha(webp)}`, webp, { 'Content-Type': 'image/webp' })).status).toBe(201);
-    const writes = e.SYNC_KV.log.filter((op) => op[0] === 'put').length;
-    const again = await call(e, 'PUT', `/api/sync/${code}/blob/${sha(jpg)}`, jpg, { 'Content-Type': 'image/jpeg' });
-    expect(again.status).toBe(200);
-    expect(await again.json()).toEqual({ hash: sha(jpg) });
-    expect(e.SYNC_KV.log.filter((op) => op[0] === 'put')).toHaveLength(writes);
-    expect(e.SYNC_KV.log.at(-1)).toEqual(['get', `blob:${code}:${sha(jpg)}`, { type: 'stream' }]);
-  });
-
-  test('refus : code inconnu, type, taille, empreinte', async () => {
-    const e = env();
-    const code = await create(e);
-    const put = (body, h = hash, headers = { 'Content-Type': 'image/png' }) => call(e, 'PUT', `/api/sync/${code}/blob/${h}`, body, headers);
-    let res = await call(e, 'PUT', `/api/sync/AAAAAAAA/blob/${hash}`, png, { 'Content-Type': 'image/png' });
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: 'Code inconnu ou expiré.' });
-    res = await put(png, hash, { 'Content-Type': 'image/gif' });
-    expect(res.status).toBe(415);
-    expect(await res.json()).toEqual({ error: 'Type d’image non pris en charge.' });
-    expect((await put(png, hash, {})).status).toBe(415);
-    res = await put(new Uint8Array([9]));
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: 'Empreinte SHA-256 incorrecte.' });
-    const max = new Uint8Array(MAX_BLOB_BYTES);
-    expect((await put(max, sha(max))).status).toBe(201);
-    const big = new Uint8Array(MAX_BLOB_BYTES + 1);
-    res = await put(big, sha(big));
-    expect(res.status).toBe(413);
-    expect(await res.json()).toEqual({ error: 'Image trop volumineuse.' });
-  });
-
-  test('lecture : absente → 404, sans type enregistré → octet-stream', async () => {
-    const e = env();
-    const code = await create(e);
-    const res = await call(e, 'GET', `/api/sync/${code}/blob/${hash}`);
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: 'Image introuvable.' });
-    e.SYNC_KV.map.set(`blob:${code}:${hash}`, png.buffer);
-    expect((await call(e, 'GET', `/api/sync/${code}/blob/${hash}`)).headers.get('Content-Type')).toBe('application/octet-stream');
-  });
-
-  test('nettoyage : image supprimée quand plus aucune version ne la référence', async () => {
-    const e = env();
-    const code = await create(e);
-    await call(e, 'PUT', `/api/sync/${code}/blob/${hash}`, png, { 'Content-Type': 'image/png' });
-    const other = sha(new Uint8Array([5]));
-    const data = (hashes) => ({ backgrounds: hashes.map((h, i) => ({ id: `b${i}`, hash: h })) });
-    await call(e, 'PUT', `/api/sync/${code}`, { baseVersion: 0, data: data([hash, other]) });
-    await call(e, 'PUT', `/api/sync/${code}`, { baseVersion: 1, data: data([hash]) });
-    expect(e.SYNC_KV.log.filter((op) => op[0] === 'delete')).toEqual([['delete', `blob:${code}:${other}`]]);
-    expect(e.SYNC_KV.map.has(`blob:${code}:${hash}`)).toBe(true);
-    await call(e, 'PUT', `/api/sync/${code}`, { baseVersion: 2, data: data([]) });
-    expect(e.SYNC_KV.map.has(`blob:${code}:${hash}`)).toBe(false);
-  });
+test('anciennes images de fonds : supprimées quand plus aucune version ne les référence', async () => {
+  const e = env();
+  const code = await create(e);
+  const hash = sha(new Uint8Array([1]));
+  const other = sha(new Uint8Array([5]));
+  e.SYNC_KV.map.set(`blob:${code}:${hash}`, new Uint8Array([1]));
+  e.SYNC_KV.map.set(`blob:${code}:${other}`, new Uint8Array([5]));
+  const data = (hashes) => ({ backgrounds: hashes.map((h, i) => ({ id: `b${i}`, hash: h })) });
+  await call(e, 'PUT', `/api/sync/${code}`, { baseVersion: 0, data: data([hash, other]) });
+  expect(e.SYNC_KV.log.filter((op) => op[0] === 'delete')).toEqual([]);
+  await call(e, 'PUT', `/api/sync/${code}`, { baseVersion: 1, data: data([hash]) });
+  expect(e.SYNC_KV.log.filter((op) => op[0] === 'delete')).toEqual([['delete', `blob:${code}:${other}`]]);
+  expect(e.SYNC_KV.map.has(`blob:${code}:${hash}`)).toBe(true);
+  // Données d'un client actuel : plus de fonds, plus d'images.
+  await call(e, 'PUT', `/api/sync/${code}`, { baseVersion: 2, data: { pois: [] } });
+  expect(e.SYNC_KV.map.has(`blob:${code}:${hash}`)).toBe(false);
 });

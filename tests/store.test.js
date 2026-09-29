@@ -27,7 +27,7 @@ test('DIMENSIONS exposé', () => {
 
 describe('chargement', () => {
   test('rien de sauvegardé : données vides', () => {
-    expect(new Store().data).toEqual({ version: 1, seed: 'minecarte', pois: [], paths: [], backgrounds: [] });
+    expect(new Store().data).toEqual({ version: 1, seed: 'minecarte', pois: [], paths: [] });
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -38,7 +38,7 @@ describe('chargement', () => {
   });
 
   test('valeur non objet : données vides', () => {
-    expect(load(42)).toEqual({ version: 1, seed: 'minecarte', pois: [], paths: [], backgrounds: [] });
+    expect(load(42)).toEqual({ version: 1, seed: 'minecarte', pois: [], paths: [] });
     expect(load(null).paths).toEqual([]);
     expect(load('texte').pois).toEqual([]);
     expect(warn).not.toHaveBeenCalled();
@@ -142,46 +142,10 @@ describe('nettoyage des chemins', () => {
   });
 });
 
-describe('nettoyage des fonds', () => {
-  const bg = (extra) => load({ backgrounds: [{ id: 'f', hash: HASH, ...extra }] }).backgrounds[0];
-
-  test('valeurs par défaut', () => {
-    expect(bg({})).toEqual({
-      id: 'f', name: 'Fond', dim: 'overworld', x: 0, z: 0, scale: 1, opacity: 1,
-      width: 1, height: 1, visible: true, hash: HASH, type: 'image/png',
-    });
-  });
-
-  test('champs valides conservés', () => {
-    expect(bg({ name: 'Spawn', dim: 'nether', x: -512.4, z: 30, scale: '0.25', opacity: 0.5, width: 1024, height: 512, visible: false, type: 'image/webp' }))
-      .toEqual({ id: 'f', name: 'Spawn', dim: 'nether', x: -512, z: 30, scale: 0.25, opacity: 0.5, width: 1024, height: 512, visible: false, hash: HASH, type: 'image/webp' });
-    expect(bg({ type: 'image/jpeg', scale: 8 })).toMatchObject({ type: 'image/jpeg', scale: 8 });
-  });
-
-  test('échelle, opacité, taille et type bornés', () => {
-    expect(bg({ scale: 3 }).scale).toBe(1);
-    expect(bg({ opacity: 0.05 }).opacity).toBe(0.1);
-    expect(bg({ opacity: 2 }).opacity).toBe(1);
-    expect(bg({ opacity: 0 }).opacity).toBe(1);
-    expect(bg({ opacity: 'x' }).opacity).toBe(1);
-    expect(bg({ width: 0, height: -3 })).toMatchObject({ width: 1, height: 1 });
-    expect(bg({ width: 'x' }).width).toBe(1);
-    expect(bg({ type: 'image/gif' }).type).toBe('image/png');
-    expect(bg({ type: '' }).type).toBe('image/png');
-    expect(bg({ type: 'image/png' }).type).toBe('image/png');
-    expect(bg({ visible: 0 }).visible).toBe(true);
-    expect(bg({ name: 'x'.repeat(101) }).name).toHaveLength(100);
-  });
-
-  test('fonds invalides ignorés (empreinte SHA-256 obligatoire)', () => {
-    const list = load({ backgrounds: [null, { hash: 'abc' }, { hash: HASH.toUpperCase() }, { hash: `x${HASH}` }, { hash: `${HASH}0` }, { hash: HASH }] }).backgrounds;
-    expect(list).toHaveLength(1);
-    expect(list[0].id).not.toBe('');
-    expect(load({ backgrounds: 'x' }).backgrounds).toEqual([]);
-    expect(load({ backgrounds: [{ id: 3, hash: HASH }] }).backgrounds[0].id).not.toBe(3);
-    expect(load({ backgrounds: [{ id: '', hash: HASH }] }).backgrounds[0].id).not.toBe('');
-  });
+test('anciens fonds importés (fonctionnalité retirée) : ignorés', () => {
+  expect(load({ backgrounds: [{ id: 'f', hash: HASH }] })).toEqual({ version: 1, seed: 'minecarte', pois: [], paths: [] });
 });
+
 
 describe('Store', () => {
   let store;
@@ -275,20 +239,6 @@ describe('Store', () => {
     expect(store.data.paths).toHaveLength(4);
   });
 
-  test('fonds : ajout nettoyé, remplacement par identifiant, refus sans empreinte, suppression', () => {
-    const f = store.saveBackground({ id: 'f', hash: HASH, name: 'Spawn', opacity: 0.01 });
-    expect(f).toMatchObject({ id: 'f', name: 'Spawn', opacity: 0.1 });
-    expect(store.getBackground('f')).toEqual(f);
-    store.saveBackground({ id: 'g', hash: HASH });
-    store.saveBackground({ id: 'f', hash: HASH, name: 'Renommé' });
-    expect(store.data.backgrounds.map((b) => [b.id, b.name])).toEqual([['g', 'Fond'], ['f', 'Renommé']]);
-    const before = calls.length;
-    expect(store.saveBackground({ id: 'h', hash: 'nope' })).toBeNull();
-    expect(calls).toHaveLength(before);
-    store.deleteBackground('f');
-    expect(store.data.backgrounds.map((b) => b.id)).toEqual(['g']);
-  });
-
   test('chaque modification est sauvegardée et notifiée', () => {
     const saved = () => JSON.parse(localStorage.getItem(KEY));
     const p = store.savePath({ name: 'R', points: [[0, 0], [1, 1]] });
@@ -297,19 +247,10 @@ describe('Store', () => {
     store.deletePath(p.id);
     expect(calls).toHaveLength(2);
     expect(saved().paths).toEqual([]);
-    store.saveBackground({ id: 'f', hash: HASH });
-    expect(calls).toHaveLength(3);
-    expect(saved().backgrounds.map((b) => b.id)).toEqual(['f']);
-    store.saveBackground({ id: 'g', hash: HASH, name: 'G' });
-    expect(store.getBackground('g').name).toBe('G');
-    expect(store.getBackground('zzz')).toBeUndefined();
-    store.deleteBackground('f');
-    expect(calls).toHaveLength(5);
-    expect(saved().backgrounds.map((b) => b.id)).toEqual(['g']);
   });
 
   test('export JSON indenté', () => {
     store.replaceAll({ seed: 's' });
-    expect(store.exportJson()).toBe(JSON.stringify({ version: 1, seed: 's', pois: [], paths: [], backgrounds: [] }, null, 2));
+    expect(store.exportJson()).toBe(JSON.stringify({ version: 1, seed: 's', pois: [], paths: [] }, null, 2));
   });
 });

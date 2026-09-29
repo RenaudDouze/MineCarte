@@ -3,7 +3,6 @@ declare const Noise: any;
 declare const Utils: any;
 declare const Terrain: any;
 declare const Icons: any;
-declare const Backgrounds: any;
 declare const Store: any;
 declare const CloudSync: any;
 declare const DIMENSIONS: string[];
@@ -12,7 +11,6 @@ interface Window {
   Utils: any;
   Terrain: any;
   Icons: any;
-  Backgrounds: any;
   Store: any;
   CloudSync: any;
   DIMENSIONS: string[];

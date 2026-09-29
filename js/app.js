@@ -74,7 +74,6 @@
     attributionControl: false,
     boxZoom: false,
   });
-  map.createPane('imagePane').style.zIndex = '220';
   map.createPane('gridPane').style.zIndex = '250';
   map.createPane('linkPane').style.zIndex = '390';
   map.createPane('pathPane').style.zIndex = '395';
@@ -101,7 +100,6 @@
     if (!state.options.grid && map.hasLayer(gridLayer)) map.removeLayer(gridLayer);
     map.getContainer().style.background = Terrain.background[state.dim];
     map.getContainer().classList.toggle('hide-labels', !state.options.labels);
-    renderBackgrounds();
   }
 
   function setDimension(dim, view) {
@@ -942,240 +940,19 @@
 
   $('#reset').addEventListener('click', () => {
     const cloudNote = cloud.code ? ' Les données seront aussi effacées du cloud et des appareils reliés.' : '';
-    if (!confirm(`Effacer tous les POI, chemins et fonds importés ? Cette action est irréversible (pensez à exporter).${cloudNote}`)) return;
+    if (!confirm(`Effacer tous les POI et chemins ? Cette action est irréversible (pensez à exporter).${cloudNote}`)) return;
     cancelMode();
     map.closePopup();
     store.replaceAll({ seed: store.data.seed });
   });
 
-  // --- Fonds de carte importés (uNmINeD) ----------------------------------------------
-  // Métadonnées dans store.data.backgrounds (synchronisées), images dans IndexedDB
-  // (Backgrounds) et, si la synchronisation est active, dans le cloud.
-
-  const bgState = {
-    overlays: new Map(), // id du fond -> { overlay, url }
-    urls: new Map(), // empreinte -> URL objet de l'image
-    loading: new Set(),
-    missing: new Map(), // empreinte -> date du dernier essai infructueux
-  };
-  const SCALE_LABELS = {
-    0.25: '4 px par bloc', 0.5: '2 px par bloc', 1: '1 px par bloc', 2: '1 px = 2 blocs', 4: '1 px = 4 blocs', 8: '1 px = 8 blocs',
-  };
-  const MISSING_RETRY_MS = 30000;
-
-  // Emprise de l'image en coordonnées Leaflet (bords des blocs, pas leur centre).
-  function bgBounds(bg) {
-    const x2 = bg.x + bg.width * bg.scale;
-    const z2 = bg.z + bg.height * bg.scale;
-    return L.latLngBounds([-bg.z, bg.x], [-z2, x2]);
-  }
-
-  // Image d'un fond : d'abord sur l'appareil, sinon depuis le cloud.
-  async function loadBgImage(hash) {
-    if (bgState.urls.has(hash) || bgState.loading.has(hash)) return;
-    bgState.loading.add(hash);
-    try {
-      let blob = await Backgrounds.getBlob(hash);
-      if (!blob && cloud.code) {
-        blob = await cloud.fetchBlob(hash);
-        if (blob) await Backgrounds.putBlob(hash, blob);
-      }
-      if (blob) {
-        bgState.urls.set(hash, URL.createObjectURL(blob));
-        bgState.missing.delete(hash);
-      } else {
-        bgState.missing.set(hash, Date.now());
-      }
-    } catch {
-      bgState.missing.set(hash, Date.now());
-    } finally {
-      bgState.loading.delete(hash);
-      renderBackgrounds();
-    }
-  }
-
-  let pruneTimer;
-  function renderBackgrounds() {
-    const list = store.data.backgrounds;
-    for (const [id, entry] of bgState.overlays) {
-      const bg = list.find((b) => b.id === id);
-      if (bg && bgState.urls.get(bg.hash) === entry.url) continue;
-      map.removeLayer(entry.overlay);
-      bgState.overlays.delete(id);
-    }
-    for (const bg of list) {
-      const url = bgState.urls.get(bg.hash);
-      if (!url) {
-        const failed = bgState.missing.get(bg.hash);
-        if (!failed || Date.now() - failed > MISSING_RETRY_MS) loadBgImage(bg.hash);
-        continue;
-      }
-      let entry = bgState.overlays.get(bg.id);
-      if (!entry) {
-        entry = { url, overlay: L.imageOverlay(url, bgBounds(bg), { pane: 'imagePane', className: 'bg-image', interactive: false }) };
-        bgState.overlays.set(bg.id, entry);
-      }
-      entry.overlay.setBounds(bgBounds(bg));
-      entry.overlay.setOpacity(bg.opacity);
-      const show = bg.visible && bg.dim === state.dim;
-      if (show && !map.hasLayer(entry.overlay)) entry.overlay.addTo(map);
-      if (!show && map.hasLayer(entry.overlay)) map.removeLayer(entry.overlay);
-    }
-    const hashes = new Set(list.map((b) => b.hash));
-    for (const [hash, url] of bgState.urls) {
-      if (hashes.has(hash)) continue;
-      URL.revokeObjectURL(url);
-      bgState.urls.delete(hash);
-    }
-    renderBgList();
-    // Nettoie les images locales qui ne servent plus.
-    clearTimeout(pruneTimer);
-    pruneTimer = setTimeout(() => Backgrounds.prune(new Set(store.data.backgrounds.map((b) => b.hash))).catch(() => {}), 3000);
-  }
-
-  function renderBgList() {
-    const list = $('#bg-list');
-    const items = store.data.backgrounds
-      .slice()
-      .sort((a, b) => DIMENSIONS.indexOf(a.dim) - DIMENSIONS.indexOf(b.dim) || a.name.localeCompare(b.name, 'fr'));
-    list.replaceChildren(...items.map((bg) => {
-      const status = bgState.urls.has(bg.hash) ? null
-        : bgState.loading.has(bg.hash) ? 'Chargement de l’image…'
-          : '⚠ Image indisponible sur cet appareil';
-      return h('li', { class: 'item bg-item' },
-        h('input', {
-          type: 'checkbox',
-          checked: bg.visible,
-          title: 'Afficher / masquer',
-          onchange: (e) => store.saveBackground(Object.assign({}, bg, { visible: e.target.checked })),
-        }),
-        h('span', { class: 'item-main', onclick: () => focusBackground(bg) },
-          h('span', { class: 'item-name' }, bg.name),
-          h('span', { class: 'item-sub' }, `${DIM_LABELS[bg.dim]} · X ${bg.x}, Z ${bg.z}`),
-          h('span', { class: 'item-sub' }, `${bg.width}×${bg.height} px · ${SCALE_LABELS[bg.scale]}`),
-          status ? h('span', { class: 'item-sub bg-status' }, status) : null),
-        h('button', { type: 'button', class: 'icon-btn', title: 'Modifier', onclick: () => openBgDialog(bg) }, '✎'),
-        h('button', {
-          type: 'button',
-          class: 'icon-btn danger',
-          title: 'Supprimer',
-          onclick: () => {
-            const where = cloud.code ? ' (aussi dans le cloud et sur les appareils reliés)' : '';
-            if (confirm(`Supprimer le fond « ${bg.name} »${where} ?`)) store.deleteBackground(bg.id);
-          },
-        }, '🗑'));
-    }));
-    if (!items.length) list.append(h('li', { class: 'empty' }, 'Aucun fond importé.'));
-  }
-
-  function focusBackground(bg) {
-    if (bg.dim !== state.dim) setDimension(bg.dim);
-    map.fitBounds(bgBounds(bg), { animate: false });
-    closeSidebarOnMobile();
-  }
-
-  let bgDialogSize = null;
-  function updateBgInfo() {
-    const f = $('#bg-form').elements;
-    const scale = Number(f.scale.value);
-    const size = bgDialogSize;
-    $('#bg-info').textContent = size
-      ? `Image de ${size.width}×${size.height} px : couvre X ${f.x.value} → ${Number(f.x.value) + size.width * scale}, ` +
-        `Z ${f.z.value} → ${Number(f.z.value) + size.height * scale}.`
-      : 'Choisis une image pour voir la zone couverte.';
-  }
-
-  function openBgDialog(bg) {
-    const form = $('#bg-form');
-    form.reset();
-    const center = fromLatLng(map.getCenter());
-    const data = Object.assign({ id: '', name: '', dim: state.dim, x: center.x, z: center.z, scale: 1, opacity: 1 }, bg);
-    $('#bg-dialog-title').textContent = bg ? 'Modifier le fond' : 'Importer un fond de carte';
-    form.elements.id.value = data.id;
-    form.elements.label.value = data.name;
-    form.elements.dim.value = data.dim;
-    form.elements.x.value = data.x;
-    form.elements.z.value = data.z;
-    form.elements.scale.value = String(data.scale);
-    form.elements.opacity.value = Math.round(data.opacity * 100);
-    form.elements.file.required = !bg;
-    bgDialogSize = bg ? { width: bg.width, height: bg.height } : null;
-    updateBgInfo();
-    $('#bg-dialog').showModal();
-  }
-
-  $('#bg-add').addEventListener('click', () => openBgDialog(null));
-  ['x', 'z', 'scale'].forEach((n) => $('#bg-form').elements[n].addEventListener('input', updateBgInfo));
-
-  $('#bg-form').elements.file.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      bgDialogSize = await Backgrounds.imageSize(file);
-      const f = $('#bg-form').elements;
-      if (!f.label.value) f.label.value = file.name.replace(/\.[^.]+$/, '');
-    } catch {
-      bgDialogSize = null;
-      toast('Image illisible.');
-    }
-    updateBgInfo();
-  });
-
-  // Place l'image au centre de la vue actuelle (quand on ne connaît pas ses coordonnées).
-  $('#bg-center').addEventListener('click', () => {
-    if (!bgDialogSize) return toast('Choisis d’abord une image.');
-    const f = $('#bg-form').elements;
-    const scale = Number(f.scale.value);
-    const c = fromLatLng(map.getCenter());
-    f.x.value = Math.round(c.x - (bgDialogSize.width * scale) / 2);
-    f.z.value = Math.round(c.z - (bgDialogSize.height * scale) / 2);
-    updateBgInfo();
-  });
-
-  $('#bg-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = e.target.elements;
-    const existing = store.getBackground(f.id.value);
-    const file = f.file.files[0];
-    if (!file && !existing) return;
-    try {
-      let image = existing ? { hash: existing.hash, type: existing.type, width: existing.width, height: existing.height } : null;
-      if (file) {
-        const size = await Backgrounds.imageSize(file);
-        const hash = await Backgrounds.sha256(file);
-        await Backgrounds.putBlob(hash, file);
-        image = { hash, type: file.type, width: size.width, height: size.height };
-      }
-      const bg = store.saveBackground(Object.assign({
-        id: existing ? existing.id : `bg-${Date.now().toString(36)}`,
-        name: f.label.value.trim() || 'Fond',
-        dim: f.dim.value,
-        x: Math.round(Number(f.x.value)) || 0,
-        z: Math.round(Number(f.z.value)) || 0,
-        scale: Number(f.scale.value),
-        opacity: Number(f.opacity.value) / 100,
-        visible: existing ? existing.visible : true,
-      }, image));
-      $('#bg-dialog').close();
-      if (!existing) focusBackground(bg);
-    } catch (err) {
-      alert(`Impossible d'enregistrer le fond : ${err.message || err}`);
-    }
-  });
-
-  // Fonds importés avant la synchronisation des images : on les reprend dans les données.
-  Backgrounds.migrateLegacy().then((metas) => {
-    metas.forEach((meta) => { if (!store.getBackground(meta.id)) store.saveBackground(meta); });
-  }, () => {
-    $('#bg-add').disabled = true;
-    $('#bg-add').title = 'Stockage local indisponible dans ce navigateur';
-  });
+  // Images des fonds importés (fonctionnalité retirée) : on libère la place
+  // qu'elles occupaient dans le navigateur.
+  window.indexedDB?.deleteDatabase('minecarte');
 
   // --- Synchronisation cloud --------------------------------------------------------
 
-  const cloud = new CloudSync(store, (window.MINECARTE_CONFIG || {}).syncUrl, renderSync, {
-    getBlob: (hash) => Backgrounds.getBlob(hash).catch(() => null),
-  });
+  const cloud = new CloudSync(store, (window.MINECARTE_CONFIG || {}).syncUrl, renderSync);
 
   // Appelé par CloudSync, qui ne démarre que si la synchronisation est configurée.
   function renderSync(status) {
@@ -1240,7 +1017,6 @@
   // --- Démarrage ------------------------------------------------------------------------------
 
   store.onChange(() => render());
-  store.onChange(() => renderBackgrounds());
   // Les icônes d'items ne sont chargées que si un POI en utilise une.
   function loadIconsIfNeeded() {
     if (!Icons.isLoaded() && store.data.pois.some((p) => p.icon)) Icons.load().then(render, () => {});

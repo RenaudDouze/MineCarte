@@ -16,13 +16,16 @@ beforeAll(async () => {
 });
 
 const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-const COLORS = { overworld: '#8e9985', nether: '#5a2b2b', void: '#0c0918', stone: '#dcdca2', obsidian: '#1b1128', bedrock: '#3c3c3c' };
+const toHex = (rgb) => `#${rgb.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+const COLORS = { void: '#0c0918', stone: '#dcdca2', obsidian: '#1b1128', bedrock: '#3c3c3c', chorus: '#8c6a9c' };
 
-// Pixel attendu : couleur × texture (variation par carré de 4 blocs).
+// Pixel attendu : couleur × relief (variation de teinte par carré de 4 blocs).
 function shaded(color, x, z) {
-  const shade = 0.97 + 0.05 * N.hash2(x >> 2, z >> 2, SEED + 7);
-  return [...new Uint8ClampedArray(hex(color).map((c) => c * shade))];
+  const shade = 0.93 + 0.1 * N.hash2(x >> 2, z >> 2, SEED + 7);
+  const rgb = typeof color === 'string' ? hex(color) : color;
+  return [...new Uint8ClampedArray(rgb.map((c) => c * shade))];
 }
+const biome = (dim, x, z) => toHex(T.generators[dim](x, z));
 
 // Tuile au zoom 8 : un bloc par tuile, un seul pixel dans le tampon.
 function blockPixel(dimension, x, z) {
@@ -34,6 +37,47 @@ function blockPixel(dimension, x, z) {
   expect(img.width).toBe(1);
   return Array.from(img.data.slice(0, 3));
 }
+
+// Référence (« golden master ») : nombre d'échantillons par couleur sur les
+// grilles de histogram(). À régénérer volontairement si l'aspect du fond change.
+const OVERWORLD_HISTOGRAM = {
+  '#1f3478': 16090,
+  '#2f4d1e': 4044,
+  '#2f52b0': 15545,
+  '#3d5aa8': 2955,
+  '#3f6b57': 4399,
+  '#3f6fd6': 1918,
+  '#3f8a36': 2295,
+  '#4d6b45': 2314,
+  '#4f8a14': 2887,
+  '#5c9c4a': 2291,
+  '#8a8a8a': 4037,
+  '#8db360': 7505,
+  '#9fb8ae': 2618,
+  '#a3c060': 3247,
+  '#bdb25f': 5504,
+  '#c46a36': 797,
+  '#dde6ee': 4010,
+  '#e3d79b': 2462,
+  '#e8c56d': 1828,
+  '#e8e6d8': 469,
+  '#eef4f8': 3386,
+};
+const NETHER_HISTOGRAM = {
+  '#1e8078': 21226,
+  '#4a4546': 10470,
+  '#5b4636': 7312,
+  '#8a3030': 17052,
+  '#a71d2a': 24386,
+  '#e0661c': 10155,
+};
+const END_HISTOGRAM = {
+  '#0c0918': 85341,
+  '#1b1128': 2,
+  '#3c3c3c': 1,
+  '#8c6a9c': 897,
+  '#dcdca2': 4360,
+};
 
 describe('TerrainLayer', () => {
   test('options par défaut', () => {
@@ -66,7 +110,7 @@ describe('TerrainLayer', () => {
       for (let i = 0; i < 128; i++) {
         const x = 256 + i * 2;
         const z = -512 + j * 2;
-        expected.set([...shaded(COLORS.overworld, x, z), 255], (j * 128 + i) * 4);
+        expected.set([...shaded(T.generators.overworld(x, z), x, z), 255], (j * 128 + i) * 4);
       }
     }
     expect(data).toEqual(expected);
@@ -87,17 +131,51 @@ describe('TerrainLayer', () => {
     const tile = new T.TerrainLayer({ dimension: 'nether' }).createTile({ x: -1, y: -1, z: -3 });
     const img = tile.getContext('2d').log[1][1].getContext('2d').image;
     // Premier échantillon : bloc (-2048, -2048) ; dernier : (-16, -16).
-    expect(Array.from(img.data.slice(0, 3))).toEqual(shaded(COLORS.nether, -2048, -2048));
+    expect(Array.from(img.data.slice(0, 3))).toEqual(shaded(T.generators.nether(-2048, -2048), -2048, -2048));
     const last = (128 * 128 - 1) * 4;
-    expect(Array.from(img.data.slice(last, last + 3))).toEqual(shaded(COLORS.nether, -16, -16));
+    expect(Array.from(img.data.slice(last, last + 3))).toEqual(shaded(T.generators.nether(-16, -16), -16, -16));
     expect(img.data[last + 3]).toBe(255);
   });
 
-  test('Overworld et Nether : aplat texturé', () => {
-    expect(blockPixel('overworld', 5, -9)).toEqual(shaded(COLORS.overworld, 5, -9));
-    expect(blockPixel('nether', -300, 41)).toEqual(shaded(COLORS.nether, -300, 41));
-    // La texture varie par carré de 4 blocs.
-    expect(blockPixel('overworld', 4, 4)).toEqual(blockPixel('overworld', 7, 7));
+  test('pixel d’un bloc : couleur du biome × relief', () => {
+    expect(blockPixel('overworld', 5, -9)).toEqual(shaded(T.generators.overworld(5, -9), 5, -9));
+    expect(blockPixel('nether', -300, 41)).toEqual(shaded(T.generators.nether(-300, 41), -300, 41));
+    // Le relief varie par carré de 4 blocs.
+    expect(blockPixel('end', 400, 400)).toEqual(blockPixel('end', 403, 403));
+    expect(blockPixel('end', 400, 400)).not.toEqual(blockPixel('end', 404, 400));
+  });
+});
+
+// Histogramme des biomes sur une grille : la moindre modification d'un seuil
+// ou d'une couleur le change. Les seuils sont entiers (bruit ramené à 0-999) et
+// la grille passe exactement sur chacun d'eux.
+function histogram(dim, radius, step) {
+  const counts = {};
+  for (let x = -radius; x <= radius; x += step) {
+    for (let z = -radius; z <= radius; z += step) {
+      const c = biome(dim, x, z);
+      counts[c] = (counts[c] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+describe('biomes', () => {
+  test('Overworld : océans, plages, rivières, montagnes et 14 biomes terrestres', () => {
+    expect(histogram('overworld', 6000, 40)).toEqual(OVERWORLD_HISTOGRAM);
+  });
+
+  test('Nether : lave, forêts carmin et biscornues, vallée des âmes, deltas de basalte', () => {
+    expect(histogram('nether', 3000, 20)).toEqual(NETHER_HISTOGRAM);
+  });
+
+  test('End : île centrale, vide, îles extérieures au-delà de 1 056 blocs environ', () => {
+    expect(histogram('end', 3000, 20)).toEqual(END_HISTOGRAM);
+  });
+
+  test('graine fixe : même fond à chaque chargement', () => {
+    expect(biome('overworld', 1234, -5678)).toBe(biome('overworld', 1234, -5678));
+    expect(T.generators.overworld(0, 0)).toBe(T.generators.overworld(0, 0));
   });
 });
 
@@ -164,8 +242,8 @@ describe('End', () => {
     }
   });
 
-  test('vide partout ailleurs, pas d’îles extérieures', () => {
-    for (const [x, z] of [[300, 0], [0, -1500], [2000, 2000], [-5000, 123]]) {
+  test('entre l’île centrale et les îles extérieures : le vide', () => {
+    for (const [x, z] of [[300, 0], [0, -700], [-723, 723], [1000, 0], [0, 1024], [1055, 0]]) {
       expect(at(x, z)).toEqual(shaded(COLORS.void, x, z));
     }
   });
@@ -268,5 +346,5 @@ describe('GridOverlay', () => {
 });
 
 test('couleurs de fond des conteneurs', () => {
-  expect(T.background).toEqual({ overworld: '#8e9985', nether: '#5a2b2b', end: '#0c0918' });
+  expect(T.background).toEqual({ overworld: '#2f52b0', nether: '#8a3030', end: '#0c0918' });
 });

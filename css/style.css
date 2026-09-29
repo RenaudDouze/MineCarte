@@ -195,6 +195,20 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
   text-overflow: ellipsis;
 }
 
+.fake-note {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 800;
+  background: rgba(15, 17, 21, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
 .mode-banner {
   position: absolute;
   top: 10px;
@@ -376,13 +390,6 @@ input[type="color"] { width: 42px; height: 32px; padding: 2px; border: 1px solid
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 .weight-preview-box { height: 20px; display: flex; align-items: center; padding: 0 4px; background: #14161b; border: 1px solid var(--border); border-radius: 6px; }
 #weight-preview { width: 100%; border-radius: 8px; }
-.xyz.xz { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-#bg-center { align-self: flex-start; margin-top: 4px; }
-.bg-image { image-rendering: pixelated; }
-.bg-item { cursor: default; }
-.bg-item .item-main { cursor: pointer; }
-.bg-status { color: #f0c64a; }
-.bg-item .icon-btn { padding: 2px 7px; font-size: 13px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
 .sync-badge {
@@ -428,4 +435,5 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   #sidebar { position: absolute; top: 0; bottom: 0; left: 0; box-shadow: 8px 0 24px rgba(0, 0, 0, 0.4); }
   .mode-banner { max-width: calc(100% - 20px); top: auto; bottom: 44px; font-size: 12.5px; }
   .coords { font-size: 11px; }
+  .fake-note { font-size: 11px; padding: 3px 8px; }
 }

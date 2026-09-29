@@ -18,17 +18,11 @@ python3 -m http.server 8000
 
 - **Trois dimensions** : Overworld, Nether et End, avec un onglet chacune. Chaque dimension
   garde sa propre vue (position et zoom).
-- **Fond neutre** : un aplat légèrement texturé par dimension, pour ne pas être confondu avec
-  une vraie carte. Dans l'End, seuls l'île centrale, ses piliers et le vide sont dessinés, car ils
-  sont les mêmes dans tous les mondes.
-- **Fonds de carte importés (uNmINeD)** : Réglages → « Importer une image… ». Une image de ton
-  monde exportée depuis [uNmINeD](https://unmined.net/) s'affiche sous la grille, les POI et les
-  chemins, dans la dimension choisie. On indique les coordonnées du bloc en haut à gauche (coin
-  nord-ouest) et l'échelle de l'export (de 4 pixels par bloc à 1 pixel pour 8 blocs), avec une
-  opacité réglable. Plusieurs fonds possibles, affichables / masquables, modifiables. Les images
-  sont gardées sur l'appareil (IndexedDB) et, avec la synchronisation cloud, envoyées au worker
-  (20 Mo max par image) : les autres appareils reliés les téléchargent automatiquement. L'export
-  JSON contient la description des fonds mais pas les images.
+- **Fond fictif** : chaque dimension a un fond qui ressemble à une carte Minecraft (océans,
+  plages, rivières, forêts, déserts, montagnes… ; lave et forêts du Nether ; îles de l'End), mais
+  il est inventé à partir d'une graine fixe et ne correspond pas à ton monde. La mention « Fond
+  fictif — pas le terrain réel » reste affichée sur la carte. Seuls l'île centrale de l'End, ses
+  piliers et le portail de sortie sont à leur vraie place.
 - **Grille** : blocs, chunks (16) et régions (512), axes X = 0 et Z = 0. Les coordonnées sous la
   souris s'affichent en bas à gauche (chunk, région, équivalent Nether ⇄ Overworld).
 - **POI** : ajout (bouton « + POI » ou clic droit sur la carte), modification et suppression.
@@ -65,13 +59,12 @@ python3 -m http.server 8000
 | --- | --- |
 | `index.html` | Page et dialogues |
 | `css/style.css` | Styles |
-| `js/noise.js` | Bruit de valeur (texture du fond, contour de l'île de l'End) |
-| `js/terrain.js` | Fond des dimensions et grille (`L.GridLayer`) |
+| `js/noise.js` | Bruit de valeur (fond fictif) |
+| `js/terrain.js` | Fond fictif des dimensions (biomes) et grille (`L.GridLayer`) |
 | `js/icons.js` | Chargement et recherche des icônes d'items |
 | `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
 | `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |
 | `worker/` | Worker Cloudflare de synchronisation |
-| `js/backgrounds.js` | Images des fonds importés (IndexedDB, par empreinte SHA-256) |
 | `js/store.js` | Modèle de données (POI, liens, chemins), persistance, import / export |
 | `js/utils.js` | Fonctions partagées (coordonnées, conversions, longueurs, DOM) |
 | `js/app.js` | Carte, rendu, interactions |
@@ -119,11 +112,6 @@ Coordonnées : la carte utilise `L.CRS.Simple`, avec 1 pixel = 1 bloc au zoom 0,
   "paths": [
     { "id": "…", "name": "Route", "color": "#ffeb3b", "dim": "nether", "weight": 4,
       "points": [[15, -42], [80, -42]] }
-  ],
-  "backgrounds": [
-    { "id": "…", "name": "Spawn", "dim": "overworld", "x": -512, "z": -512, "scale": 1,
-      "opacity": 1, "width": 1024, "height": 1024, "visible": true,
-      "hash": "<sha-256 de l'image>", "type": "image/png" }
   ]
 }
 ```
