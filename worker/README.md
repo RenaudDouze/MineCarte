@@ -68,8 +68,6 @@ KV, sans committer ce changement.
 | `POST /api/sync` | `201 { code }` |
 | `GET /api/sync/:code` | `200 { version, data }` ou `404` |
 | `PUT /api/sync/:code` avec `{ baseVersion, data }` | `200 { version, data }` ou `409 { version, data }` |
-| `PUT /api/sync/:code/blob/:sha256` avec l'image | `201`, `200` (déjà présente), `400` (empreinte fausse), `413` (> 20 Mo), `415` |
-| `GET /api/sync/:code/blob/:sha256` | `200` avec l'image ou `404` |
 
 - Une valeur par code, sous la clé `sync:<CODE>` ; `data` contient `seed`, `pois`
   et `paths` (même format que l'export JSON).
@@ -77,12 +75,11 @@ KV, sans committer ce changement.
   stockée, puis la version est incrémentée. Sinon `409` avec l'état serveur :
   l'appli fusionne (POI par POI, chemin par chemin) et repousse. La version est
   un entier attribué par le serveur, jamais une horloge.
-- Les images des fonds de carte sont stockées à part, une clé `blob:<CODE>:<sha256>` par image
-  (20 Mo max, PNG / JPEG / WebP). Le worker vérifie l'empreinte à l'envoi et ne réécrit pas une
-  image déjà présente. `data.backgrounds` ne contient que leurs descriptions ; une image qui n'y
-  est plus référencée après une écriture est supprimée.
-- Un code inutilisé pendant 180 jours expire (ses images, elles, n'ont pas d'expiration : elles
-  sont supprimées quand on retire le fond).
+- Un code inutilisé pendant 180 jours expire.
+- Les images des fonds importés (fonctionnalité retirée) étaient stockées sous
+  `blob:<CODE>:<sha256>`. Le worker les supprime au premier `PUT` qui ne les
+  référence plus, ce que font les versions actuelles de l'appli dès leur première
+  synchronisation.
 - Aucune protection au-delà du code (~500 milliards de combinaisons) : quiconque
   le connaît peut lire et modifier les données associées.
 - Quota du plan gratuit de Cloudflare KV : 1 000 écritures par jour. L'appli

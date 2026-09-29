@@ -20,7 +20,6 @@ export const targets = {
   'js/store.js': ['tests/store.test.js'],
   'js/icons.js': ['tests/icons.test.js'],
   'js/config.js': ['tests/config.test.js'],
-  'js/backgrounds.js': ['tests/backgrounds.test.js'],
   'js/sync.js': ['tests/sync.test.js'],
   'worker/src/index.js': ['worker/test/worker.test.js'],
   'worker/src/code.js': ['worker/test/worker.test.js'],

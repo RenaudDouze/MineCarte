@@ -2,10 +2,11 @@
  * Fond de carte des trois dimensions et grille (blocs / chunks / régions),
  * sous forme de GridLayer Leaflet.
  *
- * Le fond est volontairement neutre, pour ne pas être pris pour le vrai terrain :
- * un aplat légèrement texturé par dimension. Seule l'île centrale de l'End
- * (avec ses piliers et le portail de sortie) est dessinée, car elle est la même
- * dans tous les mondes.
+ * Le fond ressemble à une carte Minecraft (océans, rivières, biomes, lave du
+ * Nether, îles de l'End) mais il est inventé : il est généré à partir d'une
+ * graine fixe et ne correspond à aucun monde. La carte l'indique en
+ * permanence (« Fond fictif »). Seule l'île centrale de l'End, ses piliers et
+ * le portail de sortie sont à leur vraie place.
  *
  * Convention de coordonnées (identique à Minecraft) :
  *   X croît vers l'est, Z croît vers le sud.
@@ -16,7 +17,6 @@
 
   const { fbm, hash2 } = global.Noise;
 
-  // Graine fixe : elle ne sert qu'à la texture et au contour de l'île de l'End.
   const SEED = global.Noise.seedFrom('minecarte');
 
   function hex(color) {
@@ -24,18 +24,94 @@
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
 
-  const COLORS = {
-    overworld: '#8e9985',
-    nether: '#5a2b2b',
-    end: '#0c0918',
+  // Bruit fBm ramené à un entier de 0 à 999 : les seuils des biomes sont des
+  // entiers, comparés exactement.
+  function level(x, z, scale, salt, octaves) {
+    return Math.floor(fbm(x / scale, z / scale, SEED + salt, octaves) * 1000);
+  }
+
+  const OVERWORLD = {
+    deepOcean: hex('#1f3478'),
+    ocean: hex('#2f52b0'),
+    coldOcean: hex('#3d5aa8'),
+    river: hex('#3f6fd6'),
+    beach: hex('#e3d79b'),
+    snowyBeach: hex('#e8e6d8'),
+    plains: hex('#8db360'),
+    sunflower: hex('#a3c060'),
+    forest: hex('#3f8a36'),
+    birch: hex('#5c9c4a'),
+    darkForest: hex('#2f4d1e'),
+    swamp: hex('#4d6b45'),
+    taiga: hex('#3f6b57'),
+    snowyTaiga: hex('#9fb8ae'),
+    snowy: hex('#eef4f8'),
+    desert: hex('#e8c56d'),
+    badlands: hex('#c46a36'),
+    savanna: hex('#bdb25f'),
+    jungle: hex('#4f8a14'),
+    mountains: hex('#8a8a8a'),
+    peaks: hex('#dde6ee'),
+  };
+
+  const NETHER = {
+    wastes: hex('#8a3030'),
+    crimson: hex('#a71d2a'),
+    warped: hex('#1e8078'),
+    soul: hex('#5b4636'),
+    basalt: hex('#4a4546'),
+    lava: hex('#e0661c'),
   };
 
   const END = {
-    void: hex(COLORS.end),
+    void: hex('#0c0918'),
     stone: hex('#dcdca2'),
     obsidian: hex('#1b1128'),
     bedrock: hex('#3c3c3c'),
+    chorus: hex('#8c6a9c'),
   };
+
+  // Élévation, température et humidité décident du biome.
+  function overworld(x, z) {
+    const e = level(x, z, 1100, 0, 5);
+    const t = level(x, z, 2200, 11, 3);
+    const m = level(x, z, 1400, 23, 3);
+
+    if (e < 360) return OVERWORLD.deepOcean;
+    if (e < 440) return t < 360 ? OVERWORLD.coldOcean : OVERWORLD.ocean;
+    if (e < 452) return t < 360 ? OVERWORLD.snowyBeach : OVERWORLD.beach;
+
+    // Rivières : une fine bande autour de la ligne médiane d'un autre bruit.
+    if (e < 660 && Math.abs(level(x, z, 800, 37, 3) - 500) < 9) return OVERWORLD.river;
+
+    if (e >= 730) return OVERWORLD.peaks;
+    if (e >= 665) return t < 380 ? OVERWORLD.peaks : OVERWORLD.mountains;
+
+    if (t < 330) return m >= 500 ? OVERWORLD.snowyTaiga : OVERWORLD.snowy;
+    if (t < 410) return m >= 470 ? OVERWORLD.taiga : OVERWORLD.plains;
+    if (t >= 580) {
+      if (m < 440) return e >= 560 ? OVERWORLD.badlands : OVERWORLD.desert;
+      return m >= 560 ? OVERWORLD.jungle : OVERWORLD.savanna;
+    }
+    if (t >= 530) {
+      if (m < 460) return OVERWORLD.savanna;
+      return m >= 570 ? OVERWORLD.swamp : OVERWORLD.plains;
+    }
+    if (m >= 580) return OVERWORLD.darkForest;
+    if (m >= 520) return OVERWORLD.forest;
+    if (m >= 470) return OVERWORLD.birch;
+    return m < 410 ? OVERWORLD.sunflower : OVERWORLD.plains;
+  }
+
+  function nether(x, z) {
+    if (level(x, z, 180, 301, 3) < 330) return NETHER.lava;
+    const a = level(x, z, 420, 101, 4);
+    if (a >= 580) return NETHER.crimson;
+    if (a < 410) return NETHER.warped;
+    const b = level(x, z, 420, 131, 4);
+    if (b >= 590) return NETHER.soul;
+    return b < 410 ? NETHER.basalt : NETHER.wastes;
+  }
 
   // Dix piliers d'obsidienne répartis sur un cercle de 42 blocs.
   const PILLARS = Array.from({ length: 10 }, (_, i) => {
@@ -48,7 +124,8 @@
     return Math.round(115 + (fbm(Math.cos(angle) * 3 + 10, Math.sin(angle) * 3 + 10, SEED + 211, 3) - 0.5) * 90);
   }
 
-  // Distances comparées au carré, en entiers : le bord est exact.
+  // Île centrale (vraie), puis îles extérieures (inventées) au-delà de
+  // 1 056 blocs environ (distance comptée par anneaux de 64 blocs).
   function end(x, z) {
     const d2 = x * x + z * z;
     if (d2 < 16) return END.bedrock;
@@ -56,14 +133,14 @@
       if ((x - px) * (x - px) + (z - pz) * (z - pz) <= r * r) return END.obsidian;
     }
     const radius = islandRadius(Math.atan2(z, x));
-    return d2 < radius * radius ? END.stone : END.void;
+    if (d2 < radius * radius) return END.stone;
+    if (Math.round(Math.sqrt(d2) / 64) > 16 && level(x, z, 140, 223, 4) >= 700) {
+      return level(x, z, 18, 227, 2) >= 660 ? END.chorus : END.stone;
+    }
+    return END.void;
   }
 
-  const GENERATORS = {
-    overworld: ((c) => () => c)(hex(COLORS.overworld)),
-    nether: ((c) => () => c)(hex(COLORS.nether)),
-    end,
-  };
+  const GENERATORS = { overworld, nether, end };
 
   const TerrainLayer = L.GridLayer.extend({
     options: {
@@ -99,8 +176,8 @@
         for (let i = 0; i < n; i++) {
           const x = Math.floor(x0 + i * step);
           const c = generate(x, z);
-          // Texture discrète : légère variation de teinte par carré de 4 blocs.
-          const shade = 0.97 + 0.05 * hash2(x >> 2, z >> 2, SEED + 7);
+          // Légère variation de teinte par carré de 4 blocs, pour le relief.
+          const shade = 0.93 + 0.1 * hash2(x >> 2, z >> 2, SEED + 7);
           data.set([c[0] * shade, c[1] * shade, c[2] * shade, 255], (j * n + i) * 4);
         }
       }
@@ -181,7 +258,8 @@
   global.Terrain = {
     TerrainLayer,
     GridOverlay,
+    generators: GENERATORS,
     // Couleur du conteneur pendant le chargement des tuiles.
-    background: COLORS,
+    background: { overworld: '#2f52b0', nether: '#8a3030', end: '#0c0918' },
   };
 })(window);

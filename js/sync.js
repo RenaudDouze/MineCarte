@@ -25,7 +25,7 @@
   }
 
   function snapshot(data) {
-    return { seed: data.seed, pois: data.pois, paths: data.paths, backgrounds: data.backgrounds };
+    return { seed: data.seed, pois: data.pois, paths: data.paths };
   }
 
   // Fusion à trois voies, élément par élément (par id) : on garde le côté qui
@@ -46,7 +46,6 @@
       seed: pick(b.seed, local.seed, remote.seed) || local.seed,
       pois: list('pois'),
       paths: list('paths'),
-      backgrounds: list('backgrounds'),
     };
   }
 
@@ -63,10 +62,8 @@
   }
 
   class CloudSync {
-    // hooks.getBlob(hash) : image locale d'un fond (Blob ou null), pour l'envoyer.
-    constructor(store, url, onStatus, hooks) {
+    constructor(store, url, onStatus) {
       this.store = store;
-      this.hooks = hooks || {};
       this.url = String(url || '').replace(/\/+$/, '');
       this.onStatus = onStatus || (() => {});
       this.state = this.loadState();
@@ -220,7 +217,6 @@
         const data = snapshot(this.store.data);
         let res;
         try {
-          await this.uploadNewImages(data);
           res = await this.request('PUT', `/${this.state.code}`, { baseVersion: this.state.version, data });
         } catch (err) {
           return this.fail(err);
@@ -231,12 +227,7 @@
           this.saveState();
           // Une modification faite pendant l'envoi repartira au prochain tour.
           if (this.isDirty()) continue;
-          if (this.warning) {
-            this.setStatus('error', this.warning);
-            this.warning = null;
-          } else {
-            this.setStatus('idle');
-          }
+          this.setStatus('idle');
           return;
         }
         if (res.status !== 409) return this.fail(res);
@@ -246,37 +237,6 @@
         this.saveState();
       }
       this.fail(new Error('Trop de conflits'));
-    }
-
-    // Envoie les images des fonds absents de la dernière version connue du
-    // serveur (celles qu'il a déjà sont conservées tant qu'elles sont référencées).
-    async uploadNewImages(data) {
-      const sent = new Set();
-      for (const bg of data.backgrounds) {
-        if (sent.has(bg.hash) || this.state.base?.backgrounds?.some((b) => b.hash === bg.hash)) continue;
-        sent.add(bg.hash);
-        const blob = this.hooks.getBlob ? await this.hooks.getBlob(bg.hash) : null;
-        if (!blob) continue; // image d'un autre appareil pas encore reçue : elle est déjà dans le cloud
-        const res = await fetch(`${this.url}/api/sync/${this.state.code}/blob/${bg.hash}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': bg.type },
-          body: blob,
-        });
-        if (res.status === 413) {
-          this.warning = `Image « ${bg.name} » trop volumineuse pour le cloud (20 Mo max) : elle reste sur cet appareil.`;
-          continue;
-        }
-        if (!res.ok) throw { status: res.status };
-      }
-    }
-
-    // Télécharge l'image d'un fond depuis le cloud (Blob ou null si absente).
-    async fetchBlob(hash) {
-      if (!this.state) return null;
-      const res = await fetch(`${this.url}/api/sync/${this.state.code}/blob/${hash}`);
-      if (res.status === 404) return null;
-      if (!res.ok) throw { status: res.status };
-      return res.blob();
     }
 
     pull() {

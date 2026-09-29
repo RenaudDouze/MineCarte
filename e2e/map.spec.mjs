@@ -9,6 +9,8 @@ test('dimensions : bouton, ancre d’URL et coordonnées converties', async ({ p
   await page.goto('/#end/0/0/1');
   await expect(page.locator('body')).toHaveAttribute('data-dim', 'end');
   await expect(page.locator('.leaflet-tile-container canvas').first()).toBeVisible();
+  // Le fond est généré : la carte le signale en permanence.
+  await expect(page.locator('.fake-note')).toHaveText('Fond fictif — pas le terrain réel');
 });
 
 test('recherche de coordonnées puis création d’un chemin', async ({ page }) => {
@@ -59,19 +61,4 @@ test('export puis import JSON', async ({ page }) => {
   await page.locator('#import-file').setInputFiles({ name: 'carte.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
   await expect(page.locator('#toast')).toHaveText('1 POI et 0 chemins importés.');
   await expect(page.locator('#poi-list .item-name')).toHaveText(['À exporter']);
-});
-
-test('import d’un fond de carte (image)', async ({ page }) => {
-  const { PNG_1PX } = await import('./fixtures.mjs');
-  await page.goto('/');
-  await page.locator('.tab[data-tab="settings"]').click();
-  await page.locator('#bg-add').click();
-  await page.locator('#bg-form [name="file"]').setInputFiles({ name: 'region.png', mimeType: 'image/png', buffer: PNG_1PX });
-  await expect(page.locator('#bg-info')).toHaveText(/Image de 1×1 px/);
-  await expect(page.locator('#bg-form [name="label"]')).toHaveValue('region');
-  await page.locator('#bg-form button[type="submit"]').click();
-  await expect(page.locator('#bg-list .item-name')).toHaveText(['region']);
-  await expect(page.locator('img.bg-image')).toHaveCount(1);
-  await page.reload();
-  await expect(page.locator('img.bg-image')).toHaveCount(1);
 });

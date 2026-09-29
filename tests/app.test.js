@@ -1,6 +1,4 @@
 import { describe, test, expect, afterEach, vi } from 'vitest';
-import { Blob as NodeBlob } from 'node:buffer';
-import { createHash } from 'node:crypto';
 import { IDBFactory } from 'fake-indexeddb';
 import { boot, teardown } from './helpers/app.js';
 import { createServer } from './helpers/server.js';
@@ -21,6 +19,8 @@ const $$ = (sel) => [...document.querySelectorAll(sel)];
 const text = (sel) => $(sel).textContent;
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const flush = async (n = 5) => { for (let i = 0; i < n; i++) await tick(); };
+// Attend qu'une condition (éventuellement asynchrone) soit vraie.
+const until = async (fn) => { for (let i = 0; i < 100 && !(await fn()); i++) await tick(); expect(await fn()).toBeTruthy(); };
 // Bouton visible dont le texte contient `label` (popups, menus…).
 function button(label, root = document) {
   const found = [...root.querySelectorAll('button')].find((b) => b.textContent.includes(label));
@@ -42,7 +42,7 @@ const ll = (x, z) => Utils.toLatLng(x, z);
 const css = (color) => { const d = document.createElement('div'); d.style.background = color; return d.style.background; };
 
 const POI = (o) => ({ name: 'P', color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, links: [], ...o });
-const DATA = (o) => ({ seed: 's', pois: [], paths: [], backgrounds: [], ...o });
+const DATA = (o) => ({ seed: 's', pois: [], paths: [], ...o });
 const withData = (data, extra = {}) => boot({ ...extra, storage: { 'minecarte:data': DATA(data), ...extra.storage } });
 
 describe('démarrage et options', () => {
@@ -62,7 +62,7 @@ describe('démarrage et options', () => {
     expect(location.hash).toBe('#overworld/0/0/0');
     expect(text('#coords')).toBe('X 0  Z 0  ·  Chunk 0, 0  ·  Région r.0.0  ·  Nether ≈ 0, 0');
     expect($('#sync-section').hidden).toBe(true);
-    expect(app.map.getPane('imagePane').style.zIndex).toBe('220');
+    expect(text('.fake-note')).toBe('Fond fictif — pas le terrain réel');
     expect(app.map.getPane('gridPane').style.zIndex).toBe('250');
     expect(app.map.getPane('linkPane').style.zIndex).toBe('390');
     expect(app.map.getPane('pathPane').style.zIndex).toBe('395');
@@ -1155,303 +1155,40 @@ describe('export, import, effacement', () => {
     const app = await withData({ seed: 'graine', pois: [POI({ id: 'a' })] });
     vi.stubGlobal('confirm', vi.fn(() => false));
     $('#reset').click();
-    expect(confirm).toHaveBeenCalledWith('Effacer tous les POI, chemins et fonds importés ? Cette action est irréversible (pensez à exporter).');
+    expect(confirm).toHaveBeenCalledWith('Effacer tous les POI et chemins ? Cette action est irréversible (pensez à exporter).');
     expect(app.store.data.pois).toHaveLength(1);
     confirm.mockReturnValue(true);
     $('#new-path').click();
     $('#reset').click();
     expect(app.state.mode).toBe(null);
-    expect(app.store.data).toMatchObject({ seed: 'graine', pois: [], paths: [], backgrounds: [] });
+    expect(app.store.data).toEqual({ version: 1, seed: 'graine', pois: [], paths: [] });
     app.cloud.state = { code: 'ABCDEFGH', version: 0, base: null };
     $('#reset').click();
     expect(confirm.mock.calls.at(-1)[0]).toContain(' Les données seront aussi effacées du cloud et des appareils reliés.');
   });
 });
 
-// Blob de Node : fake-indexeddb le clone correctement (celui de jsdom perd ses méthodes).
-const png = (bytes = [1, 2, 3], type = 'image/png') => new NodeBlob([new Uint8Array(bytes)], { type });
-const sha = (bytes = [1, 2, 3]) => createHash('sha256').update(Buffer.from(bytes)).digest('hex');
-const BG = (o) => ({ id: 'g', name: 'Base', dim: 'overworld', x: 0, z: 0, width: 10, height: 20, scale: 2, opacity: 0.5, visible: true, hash: sha(), type: 'image/png', ...o });
-const overlays = (app) => layers(app, (l) => l instanceof L.ImageOverlay);
-const until = async (fn) => { for (let i = 0; i < 100 && !fn(); i++) await tick(); expect(fn()).toBeTruthy(); };
-
-describe('fonds importés', () => {
-  test('image locale : superposition, emprise, opacité, liste', async () => {
-    const app = await boot();
-    await Backgrounds.putBlob(sha(), png());
-    app.store.saveBackground(BG({ x: -4, z: 6 }));
-    expect(text('#bg-list .bg-status')).toBe('Chargement de l’image…');
-    await until(() => overlays(app).length);
-    const [o] = overlays(app);
-    expect(o.getBounds()).toEqual(L.latLngBounds([-6, -4], [-46, 16]));
-    expect(o.options).toMatchObject({ opacity: 0.5, pane: 'imagePane', className: 'bg-image', interactive: false });
-    expect(o._url).toBe(app.urls.created.at(-1)[0]);
-    expect($('#bg-list .bg-status')).toBeNull();
-    const subs = $$('#bg-list .item-sub').map((e) => e.textContent);
-    expect(subs).toEqual(['Overworld · X -4, Z 6', '10×20 px · 1 px = 2 blocs']);
-    expect(text('#bg-list .item-name')).toBe('Base');
-  });
-
-  test('masquer, autre dimension, déplacer, supprimer (URL libérée)', async () => {
-    const app = await boot();
-    await Backgrounds.putBlob(sha(), png());
-    app.store.saveBackground(BG());
-    await until(() => overlays(app).length);
-    const url = app.urls.created.at(-1)[0];
-    change($('#bg-list input[type="checkbox"]'), false);
-    expect(app.store.getBackground('g').visible).toBe(false);
-    expect(overlays(app)).toHaveLength(0);
-    change($('#bg-list input[type="checkbox"]'), true);
-    expect(overlays(app)).toHaveLength(1);
-    $('.dim-btn[data-dim="end"]').click();
-    expect(overlays(app)).toHaveLength(0);
-    $('.dim-btn[data-dim="overworld"]').click();
-    const [o] = overlays(app);
-    app.store.saveBackground({ ...app.store.getBackground('g'), x: 100, opacity: 1 });
-    expect(overlays(app)).toEqual([o]);
-    expect(o.getBounds().getWest()).toBe(100);
-    expect(o.options.opacity).toBe(1);
-    app.store.deleteBackground('g');
-    expect(overlays(app)).toHaveLength(0);
-    expect(app.urls.revoked).toContain(url);
-    expect(text('#bg-list')).toBe('Aucun fond importé.');
-  });
-
-  test('nouvelle image pour un fond : superposition remplacée', async () => {
-    const app = await boot();
-    await Backgrounds.putBlob(sha(), png());
-    await Backgrounds.putBlob(sha([9]), png([9]));
-    app.store.saveBackground(BG());
-    await until(() => overlays(app).length);
-    const [first] = overlays(app);
-    app.store.saveBackground(BG({ hash: sha([9]) }));
-    await until(() => overlays(app).length && overlays(app)[0] !== first);
-    expect(overlays(app)).toHaveLength(1);
-  });
-
-  test('image absente : avertissement, nouvel essai après 30 s', async () => {
-    const app = await boot();
-    const get = vi.spyOn(Backgrounds, 'getBlob');
-    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
-    app.store.saveBackground(BG());
-    await until(() => text('#bg-list').includes('⚠'));
-    expect(text('#bg-list .bg-status')).toBe('⚠ Image indisponible sur cet appareil');
-    expect(get).toHaveBeenCalledTimes(1);
-    now.mockReturnValue(31000);
-    app.store.saveBackground(BG({ name: 'B' }));
-    await flush();
-    expect(get).toHaveBeenCalledTimes(1);
-    now.mockReturnValue(31001);
-    await Backgrounds.putBlob(sha(), png());
-    app.store.saveBackground(BG({ name: 'C' }));
-    await until(() => overlays(app).length);
-    expect(get).toHaveBeenCalledTimes(2);
-  });
-
-  test('stockage en erreur : image indisponible', async () => {
-    const app = await boot();
-    vi.spyOn(Backgrounds, 'getBlob').mockRejectedValue(new Error('IDB'));
-    app.store.saveBackground(BG());
-    await until(() => text('#bg-list').includes('⚠'));
-  });
-
-  test('nettoyage des images 3 s après la dernière modification', async () => {
-    const app = await boot();
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const prune = vi.spyOn(Backgrounds, 'prune').mockRejectedValue(new Error('IDB'));
-    app.store.saveBackground(BG());
-    vi.advanceTimersByTime(2999);
-    app.store.saveBackground(BG({ id: 'h', hash: sha([7]) }));
-    vi.advanceTimersByTime(2999);
-    expect(prune).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
-    expect(prune).toHaveBeenCalledTimes(1);
-    expect([...prune.mock.calls[0][0]].sort()).toEqual([sha(), sha([7])].sort());
-  });
-
-  test('liste triée, aller à un fond, modifier, supprimer', async () => {
-    const app = await boot();
-    app.store.saveBackground(BG({ id: 'e', name: 'Zone End', dim: 'end', scale: 0.25 }));
-    app.store.saveBackground(BG({ id: 'b', name: 'Bourg', scale: 8 }));
-    app.store.saveBackground(BG({ id: 'a', name: 'Abri', scale: 0.5 }));
-    app.store.saveBackground(BG({ id: 'n', name: 'Nid', dim: 'nether', scale: 4 }));
-    expect($$('#bg-list .item-name').map((e) => e.textContent)).toEqual(['Abri', 'Bourg', 'Nid', 'Zone End']);
-    expect($$('#bg-list .item-sub:not(.bg-status)').filter((_, i) => i % 2).map((e) => e.textContent.split(' · ')[1]))
-      .toEqual(['2 px par bloc', '1 px = 8 blocs', '1 px = 4 blocs', '4 px par bloc']);
-    const fit = vi.spyOn(app.map, 'fitBounds');
-    $$('#bg-list .item-main')[3].click();
-    expect(app.state.dim).toBe('end');
-    expect(fit.mock.calls[0][0]).toEqual(L.latLngBounds([-0, 0], [-5, 2.5]));
-    expect(fit.mock.calls[0][1]).toMatchObject({ animate: false });
-    $$('#bg-list .item-main')[0].click();
-    expect(app.state.dim).toBe('overworld');
-
-    const edit = $$('#bg-list .item')[1].querySelector('button[title="Modifier"]');
-    expect(edit.textContent).toBe('✎');
-    edit.click();
-    const f = $('#bg-form').elements;
-    expect($('#bg-dialog').open).toBe(true);
-    expect(text('#bg-dialog-title')).toBe('Modifier le fond');
-    expect([f.id.value, f.label.value, f.dim.value, f.x.value, f.z.value, f.scale.value, f.opacity.value, f.file.required])
-      .toEqual(['b', 'Bourg', 'overworld', '0', '0', '8', '50', false]);
-    expect(text('#bg-info')).toBe('Image de 10×20 px : couvre X 0 → 80, Z 0 → 160.');
-    $('#bg-dialog').close();
-
-    vi.stubGlobal('confirm', vi.fn(() => false));
-    const del = $$('#bg-list .item')[1].querySelector('button[title="Supprimer"]');
-    expect(del.textContent).toBe('🗑');
-    expect(del.className).toBe('icon-btn danger');
-    del.click();
-    expect(confirm).toHaveBeenCalledWith('Supprimer le fond « Bourg » ?');
-    expect(app.store.getBackground('b')).toBeTruthy();
-    confirm.mockReturnValue(true);
-    app.cloud.state = { code: 'ABCDEFGH', version: 0, base: null };
-    $$('#bg-list .item')[1].querySelector('button[title="Supprimer"]').click();
-    expect(confirm.mock.calls[1][0]).toBe('Supprimer le fond « Bourg » (aussi dans le cloud et sur les appareils reliés) ?');
-    expect(app.store.getBackground('b')).toBeUndefined();
-  });
-});
-
-describe('dialogue d’import de fond', () => {
-  const file = (name = 'carte.png', bytes = [1, 2, 3]) => Object.assign(png(bytes), { name });
-
-  test('nouveau fond : taille lue, nom proposé, centrage, enregistrement', async () => {
-    const app = await boot();
-    app.map.setView(ll(1000, 500), 0, { animate: false });
-    vi.spyOn(Backgrounds, 'imageSize').mockResolvedValue({ width: 100, height: 50 });
-    $('#bg-add').click();
-    const f = $('#bg-form').elements;
-    expect(text('#bg-dialog-title')).toBe('Importer un fond de carte');
-    expect(f.file.required).toBe(true);
-    expect([f.id.value, f.label.value, f.dim.value, f.x.value, f.z.value, f.scale.value, f.opacity.value])
-      .toEqual(['', '', 'overworld', '1000', '500', '1', '100']);
-    expect(text('#bg-info')).toBe('Choisis une image pour voir la zone couverte.');
-    $('#bg-center').click();
-    expect(text('#toast')).toBe('Choisis d’abord une image.');
-    setFiles(f.file, []);
-    setFiles(f.file, [file('uNmINeD.export.png')]);
-    await flush();
-    expect(f.label.value).toBe('uNmINeD.export');
-    expect(text('#bg-info')).toBe('Image de 100×50 px : couvre X 1000 → 1100, Z 500 → 550.');
-    change(f.scale, '2');
-    input(f.scale, '2');
-    expect(text('#bg-info')).toBe('Image de 100×50 px : couvre X 1000 → 1200, Z 500 → 600.');
-    $('#bg-center').click();
-    expect([f.x.value, f.z.value]).toEqual(['900', '450']);
-    input(f.x, '-10');
-    expect(text('#bg-info')).toBe('Image de 100×50 px : couvre X -10 → 190, Z 450 → 550.');
-    input(f.z, '7');
-    expect(text('#bg-info')).toContain('Z 7 → 107.');
-    f.label.value = '  ';
-    f.opacity.value = '40';
-    app.map.setView(ll(0, 0), 3, { animate: false });
-    const fit = vi.spyOn(app.map, 'fitBounds');
-    vi.spyOn(Date, 'now').mockReturnValue(36 ** 3);
-    submit($('#bg-form'));
-    await until(() => !$('#bg-dialog').open);
-    expect(app.store.data.backgrounds).toEqual([{
-      id: 'bg-1000', name: 'Fond', dim: 'overworld', x: -10, z: 7, scale: 2, opacity: 0.4,
-      width: 100, height: 50, visible: true, hash: sha(), type: 'image/png',
-    }]);
-    expect(await Backgrounds.getBlob(sha())).toBeTruthy();
-    expect(fit).toHaveBeenCalled();
-  });
-
-  test('un nom déjà saisi est gardé, image illisible', async () => {
-    await boot();
-    const size = vi.spyOn(Backgrounds, 'imageSize').mockResolvedValue({ width: 1, height: 1 });
-    $('#bg-add').click();
-    const f = $('#bg-form').elements;
-    f.label.value = 'Mon nom';
-    setFiles(f.file, [file()]);
-    await flush();
-    expect(f.label.value).toBe('Mon nom');
-    size.mockRejectedValue(new Error('illisible'));
-    setFiles(f.file, [file()]);
-    await flush();
-    expect(text('#toast')).toBe('Image illisible.');
-    expect(text('#bg-info')).toBe('Choisis une image pour voir la zone couverte.');
-  });
-
-  test('modifier sans nouvelle image : image et visibilité gardées, pas de recentrage', async () => {
-    const app = await boot();
-    app.store.saveBackground(BG({ visible: false, type: 'image/webp' }));
-    $('#bg-list button[title="Modifier"]').click();
-    const f = $('#bg-form').elements;
-    f.label.value = ' Nouveau ';
-    f.x.value = '';
-    f.z.value = '3.6';
-    const fit = vi.spyOn(app.map, 'fitBounds');
-    submit($('#bg-form'));
-    await until(() => !$('#bg-dialog').open);
-    expect(app.store.getBackground('g')).toMatchObject({ name: 'Nouveau', x: 0, z: 4, visible: false, hash: sha(), type: 'image/webp', width: 10, height: 20 });
-    expect(fit).not.toHaveBeenCalled();
-  });
-
-  test('modifier avec une nouvelle image', async () => {
-    const app = await boot();
-    vi.spyOn(Backgrounds, 'imageSize').mockResolvedValue({ width: 64, height: 32 });
-    app.store.saveBackground(BG());
-    $('#bg-list button[title="Modifier"]').click();
-    const f = $('#bg-form').elements;
-    Object.defineProperty(f.file, 'files', { configurable: true, value: [file('b.jpg', [5])] });
-    submit($('#bg-form'));
-    await until(() => !$('#bg-dialog').open);
-    expect(app.store.getBackground('g')).toMatchObject({ hash: sha([5]), width: 64, height: 32 });
-  });
-
-  test('sans image ni fond existant : rien ; erreurs signalées', async () => {
-    const app = await boot();
-    vi.stubGlobal('alert', vi.fn());
-    $('#bg-add').click();
-    submit($('#bg-form'));
-    await flush();
-    expect($('#bg-dialog').open).toBe(true);
-    const f = $('#bg-form').elements;
-    Object.defineProperty(f.file, 'files', { configurable: true, value: [file()] });
-    vi.spyOn(Backgrounds, 'imageSize').mockRejectedValueOnce(new Error('Image illisible')).mockRejectedValueOnce('brut');
-    submit($('#bg-form'));
-    await flush();
-    expect(alert).toHaveBeenCalledWith("Impossible d'enregistrer le fond : Image illisible");
-    submit($('#bg-form'));
-    await flush();
-    expect(alert).toHaveBeenCalledWith("Impossible d'enregistrer le fond : brut");
-    expect(app.store.data.backgrounds).toEqual([]);
-  });
-});
-
-describe('reprise des anciens fonds', () => {
-  async function legacyDb(entries) {
+describe('anciens fonds importés (fonctionnalité retirée)', () => {
+  test('images supprimées du navigateur au démarrage', async () => {
     const idb = new IDBFactory();
-    await new Promise((resolve, reject) => {
-      const req = idb.open('minecarte', 1);
-      req.onupgradeneeded = () => req.result.createObjectStore('backgrounds', { keyPath: 'id' });
-      req.onsuccess = () => {
-        const tx = req.result.transaction('backgrounds', 'readwrite');
-        entries.forEach((e) => tx.objectStore('backgrounds').put(e));
-        tx.oncomplete = () => { req.result.close(); resolve(); };
-      };
-      req.onerror = () => reject(req.error);
+    await new Promise((resolve) => {
+      const req = idb.open('minecarte', 2);
+      req.onupgradeneeded = () => req.result.createObjectStore('blobs', { keyPath: 'hash' });
+      req.onsuccess = () => { req.result.close(); resolve(); };
     });
-    return idb;
-  }
-
-  test('fonds repris dans les données, ceux déjà présents gardés', async () => {
-    const meta = BG();
-    delete meta.hash;
-    delete meta.type;
-    const idb = await legacyDb([{ ...meta, id: 'old', name: 'Ancien', blob: png() }, { ...meta, id: 'g', name: 'Doublon', blob: png([4]) }]);
-    const app = await boot({ idb, storage: { 'minecarte:data': DATA({ backgrounds: [BG({ name: 'Déjà là' })] }) } });
-    await until(() => app.store.getBackground('old'));
-    expect(app.store.getBackground('old')).toMatchObject({ name: 'Ancien', hash: sha(), type: 'image/png' });
-    expect(app.store.getBackground('g').name).toBe('Déjà là');
+    expect((await idb.databases()).map((d) => d.name)).toEqual(['minecarte']);
+    await boot({ idb });
+    await until(async () => (await idb.databases()).length === 0);
   });
 
-  test('stockage indisponible : import désactivé', async () => {
-    const idb = { open() { const req = {}; setTimeout(() => { req.error = new Error('bloqué'); req.onerror(); }); return req; } };
-    await boot({ idb });
-    await until(() => $('#bg-add').disabled);
-    expect($('#bg-add').title).toBe('Stockage local indisponible dans ce navigateur');
+  test('sans IndexedDB : démarrage normal', async () => {
+    const app = await boot({ before: () => vi.stubGlobal('indexedDB', undefined) });
+    expect(app.state.dim).toBe('overworld');
+  });
+
+  test('fonds ignorés dans les données locales', async () => {
+    const app = await withData({ backgrounds: [{ id: 'g', hash: 'a'.repeat(64) }] });
+    expect(app.store.data).not.toHaveProperty('backgrounds');
   });
 });
 
@@ -1544,32 +1281,5 @@ describe('synchronisation cloud', () => {
     expect(app.cloud.code).toBe(null);
     expect($('#sync-off').hidden).toBe(false);
     expect($('#sync-badge').hidden).toBe(true);
-  });
-
-  test('image absente de l’appareil : téléchargée depuis le cloud et gardée', async () => {
-    const { app, server } = await start();
-    $('#sync-create').click();
-    await until(() => app.cloud.status.kind === 'idle');
-    const code = app.cloud.code;
-    await server.fetch(`${URL_}/api/sync/${code}/blob/${sha()}`, { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array([1, 2, 3]) });
-    app.store.saveBackground(BG());
-    await until(() => overlays(app).length);
-    expect(await Backgrounds.getBlob(sha())).toBeTruthy();
-    // Absente aussi du cloud.
-    app.store.saveBackground(BG({ id: 'h', hash: sha([8]) }));
-    await until(() => text('#bg-list').includes('⚠'));
-  });
-
-  test('envoi des images locales au cloud (lecture en erreur ignorée)', async () => {
-    const { app, server } = await start();
-    await Backgrounds.putBlob(sha(), png());
-    app.store.saveBackground(BG());
-    $('#sync-create').click();
-    await until(() => app.cloud.status.kind === 'idle');
-    expect(server.env.SYNC_KV.map.has(`blob:${app.cloud.code}:${sha()}`)).toBe(true);
-    vi.spyOn(Backgrounds, 'getBlob').mockRejectedValue(new Error('IDB'));
-    app.store.saveBackground(BG({ id: 'h', hash: sha([6]) }));
-    await app.cloud.pushNow();
-    expect(app.cloud.status.kind).toBe('idle');
   });
 });

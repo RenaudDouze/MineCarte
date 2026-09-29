@@ -1,5 +1,4 @@
 import { describe, test, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { Blob as NodeBlob } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { createServer } from './helpers/server.js';
 
@@ -15,22 +14,20 @@ beforeAll(async () => {
 const URL_ = 'https://sync.test';
 const STATE_KEY = 'minecarte:sync';
 const sha = (bytes) => createHash('sha256').update(Buffer.from(bytes)).digest('hex');
-const png = (bytes) => new NodeBlob([new Uint8Array(bytes)], { type: 'image/png' });
 
 let server;
 let store;
 let statuses;
 let sync;
-let blobs;
 
 // Chaque appareil démarre avec son propre stockage : jsdom n'a qu'un
 // localStorage, on le vide avant de construire l'appareil (Store et CloudSync
 // ne relisent le stockage qu'à la construction).
-function device({ url = URL_, hooks } = {}) {
+function device({ url = URL_ } = {}) {
   localStorage.clear();
   const s = new Store();
   const st = [];
-  const cs = new CloudSync(s, url, (status) => st.push({ ...status }), hooks ?? { getBlob: async (h) => blobs.get(h) ?? null });
+  const cs = new CloudSync(s, url, (status) => st.push({ ...status }));
   return { store: s, statuses: st, sync: cs };
 }
 
@@ -38,7 +35,6 @@ beforeEach(() => {
   localStorage.clear();
   server = createServer();
   vi.stubGlobal('fetch', server.fetch);
-  blobs = new Map();
   ({ store, statuses, sync } = device());
 });
 afterEach(() => {
@@ -73,9 +69,9 @@ describe('fonctions pures', () => {
     const P = (id, name) => ({ id, name });
 
     test('le côté modifié gagne ; les deux modifiés : le local gagne', () => {
-      const base = { seed: 's', pois: [P('a', 'A'), P('b', 'B'), P('c', 'C')], paths: [], backgrounds: [] };
-      const local = { seed: 's', pois: [P('a', 'A-local'), P('b', 'B'), P('c', 'C-local')], paths: [], backgrounds: [] };
-      const remote = { seed: 's', pois: [P('a', 'A'), P('b', 'B-remote'), P('c', 'C-remote')], paths: [], backgrounds: [] };
+      const base = { seed: 's', pois: [P('a', 'A'), P('b', 'B'), P('c', 'C')], paths: [] };
+      const local = { seed: 's', pois: [P('a', 'A-local'), P('b', 'B'), P('c', 'C-local')], paths: [] };
+      const remote = { seed: 's', pois: [P('a', 'A'), P('b', 'B-remote'), P('c', 'C-remote')], paths: [] };
       expect(merge(base, local, remote).pois).toEqual([P('a', 'A-local'), P('b', 'B-remote'), P('c', 'C-local')]);
     });
 
@@ -93,8 +89,8 @@ describe('fonctions pures', () => {
     });
 
     test('sans base (rejoindre un code) : union, le local gagne en cas de conflit', () => {
-      const r = merge(null, { seed: 'l', backgrounds: [P('x', 'local'), P('y', 'Y')] }, { seed: 'r', backgrounds: [P('x', 'distant'), P('z', 'Z')] });
-      expect(r.backgrounds).toEqual([P('x', 'local'), P('z', 'Z'), P('y', 'Y')]);
+      const r = merge(null, { seed: 'l', pois: [P('x', 'local'), P('y', 'Y')] }, { seed: 'r', pois: [P('x', 'distant'), P('z', 'Z')] });
+      expect(r.pois).toEqual([P('x', 'local'), P('z', 'Z'), P('y', 'Y')]);
       expect(r.seed).toBe('l');
     });
 
@@ -106,7 +102,9 @@ describe('fonctions pures', () => {
     });
 
     test('listes absentes acceptées', () => {
-      expect(merge({}, {}, {})).toEqual({ seed: undefined, pois: [], paths: [], backgrounds: [] });
+      expect(merge({}, {}, {})).toEqual({ seed: undefined, pois: [], paths: [] });
+      // Anciens fonds importés (fonctionnalité retirée) : plus fusionnés.
+      expect(merge({}, {}, { backgrounds: [P('f', 'F')] })).toEqual({ seed: undefined, pois: [], paths: [] });
     });
   });
 });
@@ -154,7 +152,7 @@ describe('état et configuration', () => {
     expect(new CloudSync(new Store(), URL_).state).toBeNull();
   });
 
-  test('sans hooks ni callback de statut', async () => {
+  test('sans callback de statut', async () => {
     const cs = new CloudSync(new Store(), URL_);
     await cs.create();
     expect(cs.code).toMatch(/^[A-Z2-9]{8}$/);
@@ -279,9 +277,9 @@ describe('créer, rejoindre, quitter', () => {
   test('appliquer des données identiques : aucune écriture', () => {
     const events = [];
     store.onChange(() => events.push(1));
-    sync.apply({ seed: store.data.seed, pois: [], paths: [], backgrounds: [] });
+    sync.apply({ seed: store.data.seed, pois: [], paths: [] });
     expect(events).toEqual([]);
-    sync.apply({ seed: store.data.seed, pois: [{ id: 'x', name: 'X' }], paths: [], backgrounds: [] });
+    sync.apply({ seed: store.data.seed, pois: [{ id: 'x', name: 'X' }], paths: [] });
     expect(events).toEqual([1]);
     expect(store.data.version).toBe(1);
   });
@@ -469,7 +467,7 @@ describe('réception', () => {
 
   test('pull sur un code resté vide côté serveur', async () => {
     vi.stubGlobal('fetch', async () => Response.json({ version: 7, data: null }));
-    sync.state = { code: 'ABCDEFGH', version: 0, base: { seed: 'minecarte', pois: [], paths: [], backgrounds: [] } };
+    sync.state = { code: 'ABCDEFGH', version: 0, base: { seed: 'minecarte', pois: [], paths: [] } };
     store.savePoi({ name: 'Garde' });
     vi.spyOn(sync, 'pushNow').mockResolvedValue();
     await sync.pull();
@@ -537,112 +535,17 @@ describe('démarrage : vérification périodique et au retour sur l’onglet', (
   });
 });
 
-describe('images des fonds', () => {
-  const bg = (hash, extra = {}) => ({ id: `bg-${hash.slice(0, 4)}`, name: 'Fond', hash, type: 'image/webp', ...extra });
-
-  test('image importée avant de créer le code : envoyée à la création', async () => {
-    const hash = sha([3, 3]);
-    blobs.set(hash, png([3, 3]));
-    store.saveBackground(bg(hash));
-    const code = await sync.create();
-    expect(server.env.SYNC_KV.map.has(`blob:${code}:${hash}`)).toBe(true);
-  });
-
-  test('nouvelle image envoyée avant sa description, une seule fois', async () => {
-    const bytes = [1, 2, 3];
-    const hash = sha(bytes);
-    blobs.set(hash, png(bytes));
-    const code = await sync.create();
-    store.saveBackground(bg(hash));
-    await sync.pushNow();
-    const upload = server.requests.filter((r) => r.url.includes('/blob/'));
-    expect(upload).toHaveLength(1);
-    expect(upload[0]).toMatchObject({ method: 'PUT', url: `${URL_}/api/sync/${code}/blob/${hash}`, headers: { 'Content-Type': 'image/webp' } });
-    expect(server.env.SYNC_KV.map.has(`blob:${code}:${hash}`)).toBe(true);
-    // Déjà connue du serveur : pas renvoyée.
-    store.saveBackground(bg(hash, { name: 'Renommé' }));
-    await sync.pushNow();
-    expect(server.requests.filter((r) => r.url.includes('/blob/'))).toHaveLength(1);
-    // Une autre image, elle, est envoyée.
-    const hash2 = sha([4, 5, 6]);
-    blobs.set(hash2, png([4, 5, 6]));
-    store.saveBackground({ id: 'autre', hash: hash2, type: 'image/png' });
-    await sync.pushNow();
-    expect(server.requests.filter((r) => r.url.includes('/blob/')).map((r) => r.url.split('/').at(-1))).toEqual([hash, hash2]);
-  });
-
-  test('même image pour deux fonds : un seul envoi', async () => {
-    const hash = sha([7]);
-    blobs.set(hash, png([7]));
-    await sync.create();
-    store.saveBackground({ id: 'a', hash, type: 'image/png' });
-    store.saveBackground({ id: 'b', hash, type: 'image/png' });
-    await sync.pushNow();
-    expect(server.requests.filter((r) => r.url.includes('/blob/'))).toHaveLength(1);
-  });
-
-  test('image absente de l’appareil (reçue d’un autre) ou sans hook : pas d’envoi', async () => {
-    const hash = sha([9]);
-    await sync.create();
-    store.saveBackground(bg(hash));
-    await sync.pushNow();
-    expect(server.requests.filter((r) => r.url.includes('/blob/'))).toHaveLength(0);
-    const bareStore = new Store();
-    const bare = new CloudSync(bareStore, URL_);
-    await bare.create();
-    bareStore.saveBackground(bg(hash));
-    await bare.pushNow();
-    expect(server.requests.filter((r) => r.url.includes('/blob/'))).toHaveLength(0);
-  });
-
-  test('base serveur sans fonds (ancienne version) : images envoyées', async () => {
-    const hash = sha([4]);
-    blobs.set(hash, png([4]));
-    await sync.create();
-    sync.state.base = { seed: 'minecarte', pois: [], paths: [] };
-    store.saveBackground(bg(hash));
-    await sync.pushNow();
-    expect(server.requests.filter((r) => r.url.includes('/blob/'))).toHaveLength(1);
-  });
-
-  test('image trop volumineuse : reste locale, avertissement après l’envoi', async () => {
-    const hash = sha([5]);
-    blobs.set(hash, png([5]));
-    const real = server.fetch;
-    vi.stubGlobal('fetch', async (url, init) => (String(url).includes('/blob/') ? new Response('{}', { status: 413 }) : real(url, init)));
-    const code = await sync.create();
-    store.saveBackground(bg(hash, { name: 'Énorme' }));
-    await sync.pushNow();
-    expect(lastStatus()).toMatchObject({ kind: 'error', message: 'Image « Énorme » trop volumineuse pour le cloud (20 Mo max) : elle reste sur cet appareil.' });
-    expect(serverState(code).data.backgrounds).toHaveLength(1);
-    // L'avertissement n'est donné qu'une fois.
-    store.savePoi({ name: 'X' });
-    await sync.pushNow();
-    expect(lastStatus().kind).toBe('idle');
-  });
-
-  test('échec d’envoi d’une image : l’envoi échoue', async () => {
-    const hash = sha([6]);
-    blobs.set(hash, png([6]));
-    const real = server.fetch;
-    vi.stubGlobal('fetch', async (url, init) => (String(url).includes('/blob/') ? new Response('{}', { status: 500 }) : real(url, init)));
-    await sync.create();
-    store.saveBackground(bg(hash));
-    await expect(sync.pushNow()).rejects.toEqual({ status: 500 });
-  });
-
-  test('téléchargement d’une image', async () => {
-    const bytes = [8, 9];
-    const hash = sha(bytes);
-    blobs.set(hash, png(bytes));
-    expect(await sync.fetchBlob(hash)).toBeNull();
-    await sync.create();
-    store.saveBackground(bg(hash));
-    await sync.pushNow();
-    const got = await sync.fetchBlob(hash);
-    expect([...new Uint8Array(await got.arrayBuffer())]).toEqual(bytes);
-    expect(await sync.fetchBlob(sha([0]))).toBeNull();
-    vi.stubGlobal('fetch', async () => new Response('', { status: 502 }));
-    await expect(sync.fetchBlob(hash)).rejects.toEqual({ status: 502 });
-  });
+test('anciens fonds importés dans le cloud : retirés au premier envoi, images supprimées', async () => {
+  const code = await sync.create();
+  const hash = sha([1, 2, 3]);
+  // État laissé par une ancienne version : un fond et son image.
+  server.env.SYNC_KV.map.set(`sync:${code}`, JSON.stringify({
+    version: 1,
+    data: { seed: 'minecarte', pois: [], paths: [], backgrounds: [{ id: 'f', hash }] },
+  }));
+  server.env.SYNC_KV.map.set(`blob:${code}:${hash}`, new Uint8Array([1, 2, 3]));
+  await sync.pull();
+  expect(serverState(code)).toEqual({ version: 2, data: { seed: 'minecarte', pois: [], paths: [] } });
+  expect(server.env.SYNC_KV.map.has(`blob:${code}:${hash}`)).toBe(false);
+  expect(lastStatus().kind).toBe('idle');
 });
