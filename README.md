@@ -44,6 +44,8 @@ python3 -m http.server 8000
 - **Aller à** des coordonnées X / Z (Y optionnel) : depuis l'emplacement trouvé, créer un lieu
   (coordonnées pré-remplies), commencer un chemin, ajouter le point au bout d'un chemin existant
   ou au tracé en cours.
+- **Tout afficher** : le bouton ⤢ sous le zoom cadre la carte sur tous les lieux et chemins de la
+  dimension affichée.
 - **URL partageable** (`#dimension/x/z/zoom`).
 - **Sauvegarde** automatique dans le navigateur (localStorage), **export et import JSON**.
 - **Synchronisation cloud par code** (Réglages) : « Créer un code » sur un appareil, puis

@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, nearestSegment } = Utils;
+  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, nearestSegment } = Utils;
   const OPTIONS_KEY = 'minecarte:options';
 
   const store = new Store();
@@ -89,6 +89,36 @@
   const pathLayer = L.layerGroup().addTo(map);
   const poiLayer = L.layerGroup().addTo(map);
   const drawLayer = L.layerGroup().addTo(map);
+
+  // Cadre la carte sur tous les lieux et chemins de la dimension affichée.
+  function fitAll() {
+    const e = extent(store.data.pois, store.data.paths, state.dim);
+    if (!e) return toast('Aucun lieu ni chemin dans cette dimension.');
+    const bounds = L.latLngBounds(toLatLng(e.minX, e.minZ), toLatLng(e.maxX, e.maxZ));
+    map.fitBounds(bounds.pad(0.1), { maxZoom: 2, animate: false });
+  }
+
+  // Bouton sous le zoom (+ / −).
+  const FitControl = L.Control.extend({
+    onAdd() {
+      const button = h('a', {
+        href: '#',
+        role: 'button',
+        class: 'fit-all',
+        title: 'Afficher tous les lieux et chemins',
+        'aria-label': 'Afficher tous les lieux et chemins',
+      }, '⤢');
+      const bar = h('div', { class: 'leaflet-bar' }, button);
+      // Un clic sur le bouton n'est pas un clic sur la carte (tracé en cours…).
+      L.DomEvent.disableClickPropagation(bar);
+      button.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        fitAll();
+      });
+      return bar;
+    },
+  });
+  new FitControl({ position: 'topleft' }).addTo(map);
 
   function applyLayers() {
     const current = terrainLayer(state.dim);

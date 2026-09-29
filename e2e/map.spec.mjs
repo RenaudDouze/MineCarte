@@ -60,3 +60,16 @@ test('export puis import JSON', async ({ page }) => {
   await expect(page.locator('#toast')).toHaveText('1 lieu(x) et 0 chemin(s) importés.');
   await expect(page.locator('#poi-list .item-name')).toHaveText(['À exporter']);
 });
+
+test('bouton « tout afficher » : cadre les lieux et chemins de la dimension', async ({ page }) => {
+  await page.goto('/#overworld/0/0/2');
+  await page.evaluate(() => {
+    const { store } = window.MineCarte;
+    store.savePoi({ name: 'Nord', dim: 'overworld', x: -900, z: -700 });
+    store.savePoi({ name: 'Sud', dim: 'overworld', x: 1200, z: 800 });
+  });
+  await expect(page.locator('.poi-label', { hasText: 'Nord' })).not.toBeInViewport();
+  await page.getByRole('button', { name: 'Afficher tous les lieux et chemins' }).click();
+  await expect(page.locator('.poi-label', { hasText: 'Nord' })).toBeInViewport();
+  await expect(page.locator('.poi-label', { hasText: 'Sud' })).toBeInViewport();
+});

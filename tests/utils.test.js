@@ -115,3 +115,24 @@ describe('géométrie', () => {
     expect(U().nearestSegment({ x: 0, y: 0 }, [{ x: 0, y: 0 }])).toBe(0);
   });
 });
+
+describe('extent', () => {
+  const poi = (x, z, dim = 'overworld') => ({ x, z, dim });
+  const path = (points, dim = 'overworld') => ({ points, dim });
+
+  test('lieux et points de chemins de la dimension seulement', () => {
+    const pois = [poi(10, -5), poi(-3, 40), poi(9999, 9999, 'nether')];
+    const paths = [path([[0, 0], [25, -60], [7, 7]]), path([[-9999, 0], [0, -9999]], 'end')];
+    expect(U().extent(pois, paths, 'overworld')).toEqual({ minX: -3, minZ: -60, maxX: 25, maxZ: 40 });
+  });
+
+  test('un seul lieu, ou seulement des chemins', () => {
+    expect(U().extent([poi(4, -2, 'end')], [], 'end')).toEqual({ minX: 4, minZ: -2, maxX: 4, maxZ: -2 });
+    expect(U().extent([], [path([[5, 1], [-5, 2]], 'nether')], 'nether')).toEqual({ minX: -5, minZ: 1, maxX: 5, maxZ: 2 });
+  });
+
+  test('dimension vide : null', () => {
+    expect(U().extent([], [], 'overworld')).toBeNull();
+    expect(U().extent([poi(1, 1, 'nether')], [path([[0, 0], [1, 1]], 'end')], 'overworld')).toBeNull();
+  });
+});

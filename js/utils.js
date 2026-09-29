@@ -61,6 +61,19 @@
     return null;
   }
 
+  // Blocs extrêmes des lieux et des points de chemins d'une dimension :
+  // { minX, minZ, maxX, maxZ }, ou null si la dimension est vide.
+  function extent(pois, paths, dim) {
+    const points = [
+      ...pois.filter((p) => p.dim === dim).map((p) => [p.x, p.z]),
+      ...paths.filter((p) => p.dim === dim).flatMap((p) => p.points),
+    ];
+    if (!points.length) return null;
+    const xs = points.map((pt) => pt[0]);
+    const zs = points.map((pt) => pt[1]);
+    return { minX: Math.min(...xs), minZ: Math.min(...zs), maxX: Math.max(...xs), maxZ: Math.max(...zs) };
+  }
+
   // Index du segment [i, i+1] d'une polyligne le plus proche d'un point
   // (coordonnées écran), avec la distance point-segment classique.
   function nearestSegment(point, vertices) {
@@ -84,5 +97,5 @@
     return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   }
 
-  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, nearestSegment, segmentDistance };
+  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, nearestSegment, segmentDistance };
 })(window);
