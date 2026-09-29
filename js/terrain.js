@@ -2,12 +2,11 @@
  * Fond de carte des trois dimensions et grille (blocs / chunks / régions),
  * sous forme de GridLayer Leaflet.
  *
- * Le fond évoque une carte Minecraft (océans, biomes, lave du Nether, îles de
- * l'End) mais il est inventé : il est généré à partir d'une graine fixe et ne
- * correspond à aucun monde. Il reste volontairement discret : chaque biome n'est
- * qu'une nuance de l'aplat de sa dimension. La carte indique en permanence
- * « Fond fictif ». Seule l'île centrale de l'End, ses piliers et le portail de
- * sortie sont à leur vraie place, avec leurs vraies couleurs.
+ * Le fond est un aplat légèrement texturé, d'une couleur propre à chaque
+ * dimension (herbe pour l'Overworld, netherrack pour le Nether, violet sombre du
+ * vide pour l'End) : il ne peut pas être pris pour le vrai terrain. Seule l'île
+ * centrale de l'End (avec ses piliers et le portail de sortie) est dessinée, car
+ * elle est la même dans tous les mondes.
  *
  * Convention de coordonnées (identique à Minecraft) :
  *   X croît vers l'est, Z croît vers le sud.
@@ -18,6 +17,7 @@
 
   const { fbm, hash2 } = global.Noise;
 
+  // Graine fixe : elle ne sert qu'à la texture et au contour de l'île de l'End.
   const SEED = global.Noise.seedFrom('minecarte');
 
   function hex(color) {
@@ -25,100 +25,18 @@
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
 
-  // Couleurs atténuées : chaque teinte est rapprochée de l'aplat de la
-  // dimension (amount = part de la teinte d'origine conservée).
-  /** @returns {Record<string, number[]>} */
-  function palette(base, colors, amount) {
-    const b = hex(base);
-    return Object.fromEntries(Object.entries(colors).map(([name, color]) => [
-      name,
-      hex(color).map((v, i) => Math.round(b[i] + (v - b[i]) * amount)),
-    ]));
-  }
+  const COLORS = {
+    overworld: '#6f9a53',
+    nether: '#7d2f2b',
+    end: '#231a33',
+  };
 
-  // Bruit fBm ramené à un entier de 0 à 999 : les seuils des biomes sont des
-  // entiers, comparés exactement.
-  function level(x, z, scale, salt, octaves) {
-    return Math.floor(fbm(x / scale, z / scale, SEED + salt, octaves) * 1000);
-  }
-
-  const OVERWORLD = palette('#8e9985', {
-    deepOcean: '#1f3478',
-    ocean: '#2f52b0',
-    coldOcean: '#3d5aa8',
-    plains: '#8db360',
-    sunflower: '#a3c060',
-    forest: '#3f8a36',
-    birch: '#5c9c4a',
-    darkForest: '#2f4d1e',
-    swamp: '#4d6b45',
-    taiga: '#3f6b57',
-    snowyTaiga: '#9fb8ae',
-    snowy: '#eef4f8',
-    desert: '#e8c56d',
-    badlands: '#c46a36',
-    savanna: '#bdb25f',
-    jungle: '#4f8a14',
-    mountains: '#8a8a8a',
-    peaks: '#dde6ee',
-  }, 0.18);
-
-  const NETHER = palette('#5a2b2b', {
-    wastes: '#8a3030',
-    crimson: '#a71d2a',
-    warped: '#1e8078',
-    soul: '#5b4636',
-    basalt: '#4a4546',
-    lava: '#e0661c',
-  }, 0.12);
-
-  // Île centrale : vraies couleurs.
   const END = {
-    void: hex('#0c0918'),
+    void: hex(COLORS.end),
     stone: hex('#dcdca2'),
     obsidian: hex('#1b1128'),
     bedrock: hex('#3c3c3c'),
   };
-  // Îles extérieures (inventées) : atténuées.
-  const OUTER_END = palette('#0c0918', { stone: '#dcdca2', chorus: '#8c6a9c' }, 0.18);
-
-  // Élévation, température et humidité décident du biome.
-  function overworld(x, z) {
-    const e = level(x, z, 1100, 0, 5);
-    const t = level(x, z, 2200, 11, 3);
-    const m = level(x, z, 1400, 23, 3);
-
-    if (e < 360) return OVERWORLD.deepOcean;
-    if (e < 440) return t < 360 ? OVERWORLD.coldOcean : OVERWORLD.ocean;
-
-    if (e >= 730) return OVERWORLD.peaks;
-    if (e >= 665) return t < 380 ? OVERWORLD.peaks : OVERWORLD.mountains;
-
-    if (t < 330) return m >= 500 ? OVERWORLD.snowyTaiga : OVERWORLD.snowy;
-    if (t < 410) return m >= 470 ? OVERWORLD.taiga : OVERWORLD.plains;
-    if (t >= 580) {
-      if (m < 440) return e >= 560 ? OVERWORLD.badlands : OVERWORLD.desert;
-      return m >= 560 ? OVERWORLD.jungle : OVERWORLD.savanna;
-    }
-    if (t >= 530) {
-      if (m < 460) return OVERWORLD.savanna;
-      return m >= 570 ? OVERWORLD.swamp : OVERWORLD.plains;
-    }
-    if (m >= 580) return OVERWORLD.darkForest;
-    if (m >= 520) return OVERWORLD.forest;
-    if (m >= 470) return OVERWORLD.birch;
-    return m < 410 ? OVERWORLD.sunflower : OVERWORLD.plains;
-  }
-
-  function nether(x, z) {
-    if (level(x, z, 180, 301, 3) < 330) return NETHER.lava;
-    const a = level(x, z, 420, 101, 4);
-    if (a >= 580) return NETHER.crimson;
-    if (a < 410) return NETHER.warped;
-    const b = level(x, z, 420, 131, 4);
-    if (b >= 590) return NETHER.soul;
-    return b < 410 ? NETHER.basalt : NETHER.wastes;
-  }
 
   // Dix piliers d'obsidienne répartis sur un cercle de 42 blocs.
   const PILLARS = Array.from({ length: 10 }, (_, i) => {
@@ -131,8 +49,7 @@
     return Math.round(115 + (fbm(Math.cos(angle) * 3 + 10, Math.sin(angle) * 3 + 10, SEED + 211, 3) - 0.5) * 90);
   }
 
-  // Île centrale (vraie), puis îles extérieures (inventées) au-delà de
-  // 1 056 blocs environ (distance comptée par anneaux de 64 blocs).
+  // Distances comparées au carré, en entiers : le bord est exact.
   function end(x, z) {
     const d2 = x * x + z * z;
     if (d2 < 16) return END.bedrock;
@@ -140,14 +57,14 @@
       if ((x - px) * (x - px) + (z - pz) * (z - pz) <= r * r) return END.obsidian;
     }
     const radius = islandRadius(Math.atan2(z, x));
-    if (d2 < radius * radius) return END.stone;
-    if (Math.round(Math.sqrt(d2) / 64) > 16 && level(x, z, 140, 223, 4) >= 700) {
-      return level(x, z, 18, 227, 2) >= 660 ? OUTER_END.chorus : OUTER_END.stone;
-    }
-    return END.void;
+    return d2 < radius * radius ? END.stone : END.void;
   }
 
-  const GENERATORS = { overworld, nether, end };
+  const GENERATORS = {
+    overworld: ((c) => () => c)(hex(COLORS.overworld)),
+    nether: ((c) => () => c)(hex(COLORS.nether)),
+    end,
+  };
 
   const TerrainLayer = L.GridLayer.extend({
     options: {
@@ -265,8 +182,7 @@
   global.Terrain = {
     TerrainLayer,
     GridOverlay,
-    generators: GENERATORS,
     // Couleur du conteneur pendant le chargement des tuiles.
-    background: { overworld: '#8e9985', nether: '#5a2b2b', end: '#0c0918' },
+    background: COLORS,
   };
 })(window);

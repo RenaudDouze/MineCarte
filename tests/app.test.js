@@ -62,7 +62,6 @@ describe('démarrage et options', () => {
     expect(location.hash).toBe('#overworld/0/0/0');
     expect(text('#coords')).toBe('X 0  Z 0  ·  Chunk 0, 0  ·  Région r.0.0  ·  Nether ≈ 0, 0');
     expect($('#sync-section').hidden).toBe(true);
-    expect(text('.fake-note')).toBe('Fond fictif — pas le terrain réel');
     expect(app.map.getPane('gridPane').style.zIndex).toBe('250');
     expect(app.map.getPane('linkPane').style.zIndex).toBe('390');
     expect(app.map.getPane('pathPane').style.zIndex).toBe('395');

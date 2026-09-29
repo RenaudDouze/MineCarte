@@ -176,7 +176,7 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
 /* --- Carte ---------------------------------------------------------------- */
 
 .map-wrap { flex: 1; position: relative; min-width: 0; }
-#map { position: absolute; inset: 0; background: #2f52b0; }
+#map { position: absolute; inset: 0; background: #6f9a53; }
 #map.drawing, #map.drawing .leaflet-interactive { cursor: crosshair; }
 
 .coords {
@@ -193,20 +193,6 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
   max-width: calc(100% - 20px);
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.fake-note {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 800;
-  background: rgba(15, 17, 21, 0.85);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  pointer-events: none;
 }
 
 .mode-banner {
@@ -435,5 +421,4 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   #sidebar { position: absolute; top: 0; bottom: 0; left: 0; box-shadow: 8px 0 24px rgba(0, 0, 0, 0.4); }
   .mode-banner { max-width: calc(100% - 20px); top: auto; bottom: 44px; font-size: 12.5px; }
   .coords { font-size: 11px; }
-  .fake-note { font-size: 11px; padding: 3px 8px; }
 }

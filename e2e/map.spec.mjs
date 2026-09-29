@@ -9,8 +9,6 @@ test('dimensions : bouton, ancre d’URL et coordonnées converties', async ({ p
   await page.goto('/#end/0/0/1');
   await expect(page.locator('body')).toHaveAttribute('data-dim', 'end');
   await expect(page.locator('.leaflet-tile-container canvas').first()).toBeVisible();
-  // Le fond est généré : la carte le signale en permanence.
-  await expect(page.locator('.fake-note')).toHaveText('Fond fictif — pas le terrain réel');
 });
 
 test('recherche de coordonnées puis création d’un chemin', async ({ page }) => {
