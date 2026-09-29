@@ -4,7 +4,8 @@ import { loadLeaflet } from './helpers/leaflet.js';
 
 let T;
 let N;
-let SEED;
+// Graine de la texture (hachage de « minecarte »).
+const SEED = 694583506;
 beforeAll(async () => {
   installCanvasMock();
   loadLeaflet();
@@ -12,11 +13,10 @@ beforeAll(async () => {
   await import('../js/terrain.js');
   T = window.Terrain;
   N = window.Noise;
-  SEED = N.seedFrom('minecarte');
 });
 
 const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-const COLORS = { overworld: '#6f9a53', nether: '#7d2f2b', void: '#231a33', stone: '#dcdca2', obsidian: '#1b1128', bedrock: '#3c3c3c' };
+const COLORS = { overworld: '#6f9a53', nether: '#7d2f2b', end: '#6e5488' };
 
 // Pixel attendu : couleur × texture (variation par carré de 4 blocs).
 function shaded(color, x, z) {
@@ -93,81 +93,15 @@ describe('TerrainLayer', () => {
     expect(img.data[last + 3]).toBe(255);
   });
 
-  test('Overworld et Nether : aplat texturé', () => {
-    expect(blockPixel('overworld', 5, -9)).toEqual(shaded(COLORS.overworld, 5, -9));
-    expect(blockPixel('nether', -300, 41)).toEqual(shaded(COLORS.nether, -300, 41));
+  test('trois dimensions : même aplat texturé, seule la couleur change', () => {
+    for (const [x, z] of [[5, -9], [-300, 41], [0, 0], [42, 0], [-90, -56], [2000, 2000]]) {
+      expect(blockPixel('overworld', x, z)).toEqual(shaded(COLORS.overworld, x, z));
+      expect(blockPixel('nether', x, z)).toEqual(shaded(COLORS.nether, x, z));
+      expect(blockPixel('end', x, z)).toEqual(shaded(COLORS.end, x, z));
+    }
     // La texture varie par carré de 4 blocs.
-    expect(blockPixel('overworld', 4, 4)).toEqual(blockPixel('overworld', 7, 7));
-  });
-});
-
-describe('End', () => {
-  const at = (x, z) => blockPixel('end', x, z);
-
-  test('bedrock du portail de sortie au centre (rayon < 4)', () => {
-    expect(at(0, 0)).toEqual(shaded(COLORS.bedrock, 0, 0));
-    expect(at(3, 0)).toEqual(shaded(COLORS.bedrock, 3, 0));
-    expect(at(-2, 2)).toEqual(shaded(COLORS.bedrock, -2, 2));
-    expect(at(0, -3)).toEqual(shaded(COLORS.bedrock, 0, -3));
-    expect(at(4, 0)).toEqual(shaded(COLORS.stone, 4, 0));
-    expect(at(3, 3)).toEqual(shaded(COLORS.stone, 3, 3));
-  });
-
-  test('dix piliers d’obsidienne à 42 blocs, rayons 3, 4 et 5', () => {
-    for (let i = 0; i < 10; i++) {
-      const angle = (Math.PI / 5) * i;
-      const px = Math.round(42 * Math.cos(angle));
-      const pz = Math.round(42 * Math.sin(angle));
-      const r = 3 + (i % 3);
-      expect(at(px, pz)).toEqual(shaded(COLORS.obsidian, px, pz));
-      // Bord inclus (distance = rayon), juste au-delà : pierre de l'End.
-      expect(at(px + r, pz)).toEqual(shaded(COLORS.obsidian, px + r, pz));
-      expect(at(px, pz - r)).toEqual(shaded(COLORS.obsidian, px, pz - r));
-      expect(at(px - r - 1, pz)).toEqual(shaded(COLORS.stone, px - r - 1, pz));
-      expect(at(px, pz + r + 1)).toEqual(shaded(COLORS.stone, px, pz + r + 1));
-    }
-  });
-
-  test('positions des piliers', () => {
-    const obsidian = (x, z) => JSON.stringify(at(x, z)) === JSON.stringify(shaded(COLORS.obsidian, x, z));
-    expect(obsidian(42, 0)).toBe(true);
-    expect(obsidian(-42, 0)).toBe(true);
-    expect(obsidian(13, 40)).toBe(true);
-    expect(obsidian(-34, -25)).toBe(true);
-    expect(obsidian(0, 42)).toBe(false);
-  });
-
-  const radius = (angle) => Math.round(115 + (N.fbm(Math.cos(angle) * 3 + 10, Math.sin(angle) * 3 + 10, SEED + 211, 3) - 0.5) * 90);
-
-  test('bord exact : un bloc pile sur le rayon est dans le vide', () => {
-    // Blocs dont la distance au centre est exactement le rayon de l'île à leur angle.
-    for (const [x, z, r] of [[-90, -56, 106], [-84, 0, 84], [0, -127, 127], [28, -96, 100]]) {
-      expect(radius(Math.atan2(z, x))).toBe(r);
-      expect(x * x + z * z).toBe(r * r);
-      expect(at(x, z)).toEqual(shaded(COLORS.void, x, z));
-    }
-    // Un bloc plus près du centre, sur le même rayon (-84, 0) → (-83, 0).
-    expect(at(-83, 0)).toEqual(shaded(COLORS.stone, -83, 0));
-  });
-
-  test('contour de l’île : 115 blocs ± 45 selon l’angle', () => {
-    for (const deg of [0, 37, 90, 145, 200, 271, 333]) {
-      const angle = (deg * Math.PI) / 180;
-      const edge = radius(angle);
-      expect(edge).toBeGreaterThan(70);
-      expect(edge).toBeLessThan(160);
-      // Point juste à l'intérieur et juste à l'extérieur du contour, à cet angle.
-      const inside = [Math.round(Math.cos(angle) * (edge - 2)), Math.round(Math.sin(angle) * (edge - 2))];
-      const outside = [Math.round(Math.cos(angle) * (edge + 2)), Math.round(Math.sin(angle) * (edge + 2))];
-      expect(at(...inside)).toEqual(shaded(COLORS.stone, ...inside));
-      expect(at(...outside)).toEqual(shaded(COLORS.void, ...outside));
-    }
-  });
-
-  test('vide partout ailleurs, pas d’îles extérieures', () => {
-    for (const [x, z] of [[300, 0], [0, -1500], [2000, 2000], [-5000, 123]]) {
-      expect(at(x, z)).toEqual(shaded(COLORS.void, x, z));
-    }
+    expect(blockPixel('end', 4, 4)).toEqual(blockPixel('end', 7, 7));
+    expect(blockPixel('end', 4, 4)).not.toEqual(blockPixel('end', 8, 4));
   });
 });
 
@@ -268,5 +202,5 @@ describe('GridOverlay', () => {
 });
 
 test('couleurs de fond des conteneurs', () => {
-  expect(T.background).toEqual({ overworld: '#6f9a53', nether: '#7d2f2b', end: '#231a33' });
+  expect(T.background).toEqual({ overworld: '#6f9a53', nether: '#7d2f2b', end: '#6e5488' });
 });

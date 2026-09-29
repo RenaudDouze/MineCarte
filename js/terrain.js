@@ -2,11 +2,9 @@
  * Fond de carte des trois dimensions et grille (blocs / chunks / régions),
  * sous forme de GridLayer Leaflet.
  *
- * Le fond est un aplat légèrement texturé, d'une couleur propre à chaque
- * dimension (herbe pour l'Overworld, netherrack pour le Nether, violet sombre du
- * vide pour l'End) : il ne peut pas être pris pour le vrai terrain. Seule l'île
- * centrale de l'End (avec ses piliers et le portail de sortie) est dessinée, car
- * elle est la même dans tous les mondes.
+ * Le fond est un aplat légèrement texturé, identique pour les trois dimensions
+ * à la couleur près (herbe pour l'Overworld, netherrack pour le Nether, violet
+ * pour l'End) : il ne peut pas être pris pour le vrai terrain.
  *
  * Convention de coordonnées (identique à Minecraft) :
  *   X croît vers l'est, Z croît vers le sud.
@@ -15,56 +13,22 @@
 (function (global) {
   'use strict';
 
-  const { fbm, hash2 } = global.Noise;
+  const { hash2 } = global.Noise;
 
-  // Graine fixe : elle ne sert qu'à la texture et au contour de l'île de l'End.
-  const SEED = global.Noise.seedFrom('minecarte');
+  // Graine fixe de la texture (hachage de « minecarte », gardé pour que la
+  // texture reste la même qu'avant).
+  const SEED = 694583506;
+
+  const COLORS = {
+    overworld: '#6f9a53',
+    nether: '#7d2f2b',
+    end: '#6e5488',
+  };
 
   function hex(color) {
     const n = parseInt(color.slice(1), 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
-
-  const COLORS = {
-    overworld: '#6f9a53',
-    nether: '#7d2f2b',
-    end: '#231a33',
-  };
-
-  const END = {
-    void: hex(COLORS.end),
-    stone: hex('#dcdca2'),
-    obsidian: hex('#1b1128'),
-    bedrock: hex('#3c3c3c'),
-  };
-
-  // Dix piliers d'obsidienne répartis sur un cercle de 42 blocs.
-  const PILLARS = Array.from({ length: 10 }, (_, i) => {
-    const angle = (Math.PI / 5) * i;
-    return [Math.round(42 * Math.cos(angle)), Math.round(42 * Math.sin(angle)), 3 + (i % 3)];
-  });
-
-  // Rayon de l'île centrale selon l'angle : 115 blocs ± 45, en blocs entiers.
-  function islandRadius(angle) {
-    return Math.round(115 + (fbm(Math.cos(angle) * 3 + 10, Math.sin(angle) * 3 + 10, SEED + 211, 3) - 0.5) * 90);
-  }
-
-  // Distances comparées au carré, en entiers : le bord est exact.
-  function end(x, z) {
-    const d2 = x * x + z * z;
-    if (d2 < 16) return END.bedrock;
-    for (const [px, pz, r] of PILLARS) {
-      if ((x - px) * (x - px) + (z - pz) * (z - pz) <= r * r) return END.obsidian;
-    }
-    const radius = islandRadius(Math.atan2(z, x));
-    return d2 < radius * radius ? END.stone : END.void;
-  }
-
-  const GENERATORS = {
-    overworld: ((c) => () => c)(hex(COLORS.overworld)),
-    nether: ((c) => () => c)(hex(COLORS.nether)),
-    end,
-  };
 
   const TerrainLayer = L.GridLayer.extend({
     options: {
@@ -87,7 +51,7 @@
       const x0 = coords.x * blocksPerTile;
       const z0 = coords.y * blocksPerTile;
 
-      const generate = GENERATORS[this.options.dimension];
+      const c = hex(COLORS[this.options.dimension]);
       const buf = document.createElement('canvas');
       buf.width = n;
       buf.height = n;
@@ -99,7 +63,6 @@
         const z = Math.floor(z0 + j * step);
         for (let i = 0; i < n; i++) {
           const x = Math.floor(x0 + i * step);
-          const c = generate(x, z);
           // Texture discrète : légère variation de teinte par carré de 4 blocs.
           const shade = 0.97 + 0.05 * hash2(x >> 2, z >> 2, SEED + 7);
           data.set([c[0] * shade, c[1] * shade, c[2] * shade, 255], (j * n + i) * 4);
