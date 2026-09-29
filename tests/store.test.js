@@ -31,6 +31,18 @@ describe('chargement', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  test('en mémoire seulement : rien lu ni écrit dans le stockage', () => {
+    localStorage.setItem(KEY, JSON.stringify({ pois: [{ id: 'a', name: 'A', x: 1, z: 2 }] }));
+    const store = new Store({ persist: false });
+    expect(store.data).toEqual({ version: 1, seed: 'minecarte', pois: [], paths: [] });
+    const seen = [];
+    store.onChange((data, source) => seen.push([data.pois.length, source]));
+    store.replaceAll({ pois: [{ id: 'b', name: 'B', x: 0, z: 0 }] }, 'remote');
+    expect(seen).toEqual([[1, 'remote']]);
+    expect(JSON.parse(localStorage.getItem(KEY)).pois.map((p) => p.id)).toEqual(['a']);
+    expect(new Store({}).data.pois.map((p) => p.id)).toEqual(['a']);
+  });
+
   test('JSON illisible : données vides et avertissement', () => {
     localStorage.setItem(KEY, '{pas du json');
     expect(new Store().data.pois).toEqual([]);

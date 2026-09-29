@@ -4,6 +4,13 @@
  *   POST /api/sync          → crée un code            → 201 { code }
  *   GET  /api/sync/:code    → état stocké             → 200 { version, data } | 404
  *   PUT  /api/sync/:code    ← { baseVersion, data }   → 200 { version, data } | 409 { version, data }
+ *   POST   /api/sync/:code/share → lien de lecture seule (créé ou existant) → 201 | 200 { view }
+ *   DELETE /api/sync/:code/share → révoque le lien                         → 200 { view: null }
+ *   GET    /api/view/:view       → données, en lecture seule               → 200 { version, data } | 404
+ *
+ * Le lien de lecture est un identifiant distinct du code (qui, lui, permet
+ * d'écrire) : share:<code> → view et view:<view> → code, sans jamais toucher
+ * l'enregistrement sync:<code> (pas de risque d'écraser une écriture).
  *
  * Écriture optimiste façon « compare-and-swap » : un PUT n'est accepté que si
  * baseVersion est exactement la version stockée ; sinon 409 avec l'état
@@ -21,6 +28,14 @@ const CREATE_ATTEMPTS = 5;
 
 export function kvKey(code) {
   return `sync:${code}`;
+}
+
+export function shareKey(code) {
+  return `share:${code}`;
+}
+
+export function viewKey(view) {
+  return `view:${view}`;
 }
 
 export function blobKey(code, hash) {
@@ -54,7 +69,7 @@ function allowedOrigin(env) {
 function corsHeaders(env) {
   return {
     'Access-Control-Allow-Origin': allowedOrigin(env),
-    'Access-Control-Allow-Methods': 'GET, PUT, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, PUT, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
@@ -66,15 +81,50 @@ function json(body, status, env) {
   });
 }
 
-async function handleCreate(env) {
+// Code aléatoire dont la clé (key(code)) est libre, ou null après CREATE_ATTEMPTS collisions.
+async function freshCode(env, key) {
   for (let i = 0; i < CREATE_ATTEMPTS; i++) {
     const code = generateSyncCode();
-    if (await env.SYNC_KV.get(kvKey(code)) !== null) continue;
-    // Version 0 = rien de poussé : le premier PUT doit envoyer baseVersion 0.
-    await env.SYNC_KV.put(kvKey(code), JSON.stringify({ version: 0, data: null }), { expirationTtl: KV_TTL_SECONDS });
-    return json({ code }, 201, env);
+    if (await env.SYNC_KV.get(key(code)) === null) return code;
   }
-  return json({ error: 'Impossible de générer un code, réessaie.' }, 500, env);
+  return null;
+}
+
+async function handleCreate(env) {
+  const code = await freshCode(env, kvKey);
+  if (code === null) return json({ error: 'Impossible de générer un code, réessaie.' }, 500, env);
+  // Version 0 = rien de poussé : le premier PUT doit envoyer baseVersion 0.
+  await env.SYNC_KV.put(kvKey(code), JSON.stringify({ version: 0, data: null }), { expirationTtl: KV_TTL_SECONDS });
+  return json({ code }, 201, env);
+}
+
+async function handleShare(env, code) {
+  if (await env.SYNC_KV.get(kvKey(code)) === null) return json({ error: 'Code inconnu ou expiré.' }, 404, env);
+  const existing = await env.SYNC_KV.get(shareKey(code));
+  if (existing !== null) return json({ view: existing }, 200, env);
+  const view = await freshCode(env, viewKey);
+  if (view === null) return json({ error: 'Impossible de générer un lien, réessaie.' }, 500, env);
+  // Sans expiration : le lien meurt avec le code (voir handleView).
+  await env.SYNC_KV.put(viewKey(view), code);
+  await env.SYNC_KV.put(shareKey(code), view);
+  return json({ view }, 201, env);
+}
+
+async function handleUnshare(env, code) {
+  const view = await env.SYNC_KV.get(shareKey(code));
+  if (view !== null) {
+    await env.SYNC_KV.delete(viewKey(view));
+    await env.SYNC_KV.delete(shareKey(code));
+  }
+  return json({ view: null }, 200, env);
+}
+
+async function handleView(env, view) {
+  const code = await env.SYNC_KV.get(viewKey(view));
+  const stored = code === null ? null : await env.SYNC_KV.get(kvKey(code));
+  if (stored === null) return json({ error: 'Lien inconnu ou révoqué.' }, 404, env);
+  const { version, data } = JSON.parse(stored);
+  return json({ version, data }, 200, env);
 }
 
 async function handleGet(env, code) {
@@ -118,6 +168,12 @@ async function route(request, env) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(env) });
 
   const segments = new URL(request.url).pathname.split('/').filter(Boolean);
+  if (segments[0] === 'api' && segments[1] === 'view' && segments.length === 3) {
+    const view = normalizeSyncCode(segments[2]);
+    if (!isValidSyncCode(view)) return json({ error: 'Lien invalide.' }, 400, env);
+    if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405, env);
+    return handleView(env, view);
+  }
   if (segments[0] !== 'api' || segments[1] !== 'sync') return json({ error: 'Not found' }, 404, env);
 
   if (segments.length === 2) {
@@ -129,6 +185,13 @@ async function route(request, env) {
     if (!isValidSyncCode(code)) return json({ error: 'Code invalide.' }, 400, env);
     if (request.method === 'GET') return handleGet(env, code);
     if (request.method === 'PUT') return handlePut(request, env, code);
+    return json({ error: 'Method not allowed' }, 405, env);
+  }
+  if (segments.length === 4 && segments[3] === 'share') {
+    const code = normalizeSyncCode(segments[2]);
+    if (!isValidSyncCode(code)) return json({ error: 'Code invalide.' }, 400, env);
+    if (request.method === 'POST') return handleShare(env, code);
+    if (request.method === 'DELETE') return handleUnshare(env, code);
     return json({ error: 'Method not allowed' }, 405, env);
   }
   return json({ error: 'Not found' }, 404, env);

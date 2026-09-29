@@ -68,6 +68,9 @@ KV, sans committer ce changement.
 | `POST /api/sync` | `201 { code }` |
 | `GET /api/sync/:code` | `200 { version, data }` ou `404` |
 | `PUT /api/sync/:code` avec `{ baseVersion, data }` | `200 { version, data }` ou `409 { version, data }` |
+| `POST /api/sync/:code/share` | lien de lecture : `201 { view }` (créé) ou `200 { view }` (existant), `404` |
+| `DELETE /api/sync/:code/share` | révoque le lien : `200 { view: null }` |
+| `GET /api/view/:view` | `200 { version, data }` ou `404` (inconnu, révoqué, code expiré) |
 
 - Une valeur par code, sous la clé `sync:<CODE>` ; `data` contient `seed`, `pois`
   et `paths` (même format que l'export JSON).
@@ -76,6 +79,10 @@ KV, sans committer ce changement.
   l'appli fusionne (POI par POI, chemin par chemin) et repousse. La version est
   un entier attribué par le serveur, jamais une horloge.
 - Un code inutilisé pendant 180 jours expire.
+- Lien en lecture seule : un identifiant distinct du code, sous `view:<VIEW>` → code, et
+  `share:<CODE>` → identifiant (sans expiration : le lien cesse de fonctionner avec son
+  code). Il ne donne que `version` et `data`, jamais le code, et ne permet aucune écriture.
+  L'enregistrement `sync:<CODE>` n'est jamais réécrit par le partage.
 - Les images des fonds importés (fonctionnalité retirée) étaient stockées sous
   `blob:<CODE>:<sha256>`. Le worker les supprime au premier `PUT` qui ne les
   référence plus, ce que font les versions actuelles de l'appli dès leur première

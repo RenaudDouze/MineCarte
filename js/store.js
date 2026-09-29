@@ -113,9 +113,12 @@
   }
 
   class Store {
-    constructor() {
+    // persist: false → données en mémoire seulement (carte partagée en lecture
+    // seule : rien n'est lu ni écrit dans le stockage du navigateur).
+    constructor({ persist = true } = {}) {
       this.listeners = [];
-      this.data = this.load();
+      this.persist = persist;
+      this.data = persist ? this.load() : emptyData();
     }
 
     load() {
@@ -131,7 +134,7 @@
     // source : 'remote' quand la modification vient de la synchronisation cloud.
     save(source) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+        if (this.persist) localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
       } catch (e) {
         console.warn('Impossible de sauvegarder les données', e);
       }

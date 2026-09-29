@@ -11,8 +11,11 @@
   <header class="topbar">
     <button id="toggle-sidebar" class="icon-btn" title="Afficher / masquer le panneau" aria-label="Panneau">☰</button>
     <h1>MineCarte</h1>
+    <span id="readonly" class="readonly-chip" hidden title="Carte partagée : consultation seulement, mise à jour automatique.">
+      <span id="readonly-text">👁 Lecture seule</span> · <a id="readonly-exit" href="./">Ma carte</a>
+    </span>
     <button type="button" id="sync-badge" class="sync-badge" hidden title="Synchronisation cloud">☁</button>
-    <div class="history-btns">
+    <div class="history-btns edit">
       <button type="button" id="undo-btn" class="icon-btn" title="Annuler (Ctrl+Z)" aria-label="Annuler" disabled>↶</button>
       <button type="button" id="redo-btn" class="icon-btn" title="Rétablir (Ctrl+Y)" aria-label="Rétablir" disabled>↷</button>
     </div>
@@ -38,7 +41,7 @@
       <section class="panel active" data-panel="pois">
         <div class="row">
           <input id="poi-search" type="search" placeholder="Rechercher…" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
-          <button type="button" id="add-poi" class="primary">+ Lieu</button>
+          <button type="button" id="add-poi" class="primary edit">+ Lieu</button>
         </div>
         <label class="check"><input type="checkbox" id="poi-all-dims"> Toutes les dimensions</label>
         <div id="cat-filter" class="cat-filter" hidden></div>
@@ -46,7 +49,7 @@
       </section>
 
       <section class="panel" data-panel="paths">
-        <div class="row">
+        <div class="row edit">
           <button type="button" id="new-path" class="primary grow">+ Tracer un chemin</button>
         </div>
         <ul id="path-list" class="list"></ul>
@@ -78,6 +81,17 @@
               <button type="button" id="sync-now">Synchroniser maintenant</button>
               <button type="button" id="sync-leave" class="danger">Se déconnecter</button>
             </div>
+            <div class="share-box">
+              <button type="button" id="share-create">👁 Lien en lecture seule</button>
+              <div id="share-on" class="share-on" hidden>
+                <input id="share-url" type="text" readonly aria-label="Lien en lecture seule" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
+                <div class="row wrap">
+                  <button type="button" id="share-copy">Copier le lien</button>
+                  <button type="button" id="share-revoke" class="danger">Révoquer</button>
+                </div>
+                <p class="hint">Ce lien montre la carte, à jour, sans permettre de la modifier ni de voir le code. « Révoquer » le rend inutilisable.</p>
+              </div>
+            </div>
           </div>
           <p id="sync-status" class="sync-status"></p>
           <p class="hint">Les modifications sont synchronisées automatiquement. Toute personne qui connaît le code peut voir et modifier les données : ne le partage qu'avec qui tu veux.</p>
@@ -86,14 +100,16 @@
         <h3>Données</h3>
         <div class="row wrap">
           <button type="button" id="export">Exporter (JSON)</button>
-          <button type="button" id="import">Importer…</button>
+          <button type="button" id="import" class="edit">Importer…</button>
           <input type="file" id="import-file" accept="application/json,.json" hidden>
-          <button type="button" id="reset" class="danger">Tout effacer</button>
+          <button type="button" id="reset" class="danger edit">Tout effacer</button>
         </div>
 
-        <h3>Historique local</h3>
-        <p class="hint">Copie automatique des données dans ce navigateur (au plus toutes les 10 minutes, et avant un import, un effacement ou une restauration). Les 10 dernières sont gardées.</p>
-        <ul id="backup-list" class="list backups"></ul>
+        <div class="edit">
+          <h3>Historique local</h3>
+          <p class="hint">Copie automatique des données dans ce navigateur (au plus toutes les 10 minutes, et avant un import, un effacement ou une restauration). Les 10 dernières sont gardées.</p>
+          <ul id="backup-list" class="list backups"></ul>
+        </div>
 
         <h3>Aide</h3>
         <ul class="help">

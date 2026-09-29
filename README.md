@@ -68,6 +68,10 @@ python3 -m http.server 8000
   « Rejoindre » avec ce code sur les autres. Les modifications sont synchronisées
   automatiquement ; en cas de modifications simultanées, les données sont fusionnées lieu par
   lieu et chemin par chemin. Nécessite un petit worker Cloudflare : voir `worker/README.md`.
+- **Lien en lecture seule** (Réglages, une fois la synchronisation active) : un lien
+  `…?vue=XXXXXXXX` montre la carte, à jour, sans permettre de la modifier ni révéler le code.
+  La carte consultée reste en mémoire (rien n'est écrit dans le navigateur de la personne qui
+  la regarde). « Révoquer » rend le lien inutilisable ; un nouveau lien peut être créé ensuite.
 
 ## Structure
 

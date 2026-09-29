@@ -1164,7 +1164,7 @@ describe('recherche de coordonnées', () => {
     const app = await withData({ paths: [PATH({ id: 'r' }), PATH({ id: 's', name: 'Sentier' }), PATH({ id: 'n', dim: 'nether' })] });
     go('7', '8');
     const select = popup().querySelector('select');
-    expect(select.className).toBe('append-path');
+    expect(select.className).toBe('append-path edit');
     expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([['', 'Ajouter au bout d’un chemin…'], ['r', 'Route'], ['s', 'Sentier']]);
     change(select, '');
     expect(popup()).not.toBeNull();
@@ -1712,5 +1712,88 @@ describe('synchronisation cloud', () => {
     expect(app.cloud.code).toBe(null);
     expect($('#sync-off').hidden).toBe(false);
     expect($('#sync-badge').hidden).toBe(true);
+  });
+
+  test('lien de lecture seule : créer, copier, révoquer, masqué à la déconnexion', async () => {
+    const { app, server } = await start();
+    $('#sync-create').click();
+    await until(() => app.cloud.status.kind === 'idle');
+    expect($('#share-on').hidden).toBe(true);
+    $('#share-create').click();
+    await until(() => !$('#share-on').hidden);
+    const view = server.env.SYNC_KV.map.get(`share:${app.cloud.code}`);
+    expect($('#share-url').value).toBe(`${location.origin}/?vue=${view}`);
+    vi.stubGlobal('prompt', vi.fn());
+    $('#share-copy').click();
+    expect(prompt).toHaveBeenCalledWith('Copier :', `${location.origin}/?vue=${view}`);
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    $('#share-revoke').click();
+    expect(confirm).toHaveBeenCalledWith('Révoquer le lien en lecture seule ? Il ne fonctionnera plus pour personne.');
+    expect($('#share-on').hidden).toBe(false);
+    confirm.mockReturnValue(true);
+    $('#share-revoke').click();
+    await until(() => $('#share-on').hidden);
+    expect(text('#toast')).toBe('Lien révoqué.');
+    expect($('#share-url').value).toBe('');
+    expect(server.env.SYNC_KV.map.has(`view:${view}`)).toBe(false);
+
+    $('#share-create').click();
+    await until(() => !$('#share-on').hidden);
+    $('#sync-leave').click();
+    expect($('#share-on').hidden).toBe(true);
+  });
+
+  test('lien de lecture seule : erreurs affichées', async () => {
+    const { app } = await start();
+    vi.spyOn(app.cloud, 'share').mockRejectedValue(new Error('Pas de lien'));
+    vi.spyOn(app.cloud, 'unshare').mockRejectedValue(new Error('Pas de révocation'));
+    $('#share-create').click();
+    await until(() => text('#toast') === 'Pas de lien');
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    $('#share-revoke').click();
+    await until(() => text('#toast') === 'Pas de révocation');
+  });
+});
+
+describe('carte partagée en lecture seule (?vue=…)', () => {
+  const URL_ = 'https://sync.test';
+
+  async function shared() {
+    const server = createServer();
+    const { code } = await (await server.fetch(`${URL_}/api/sync`, { method: 'POST' })).json();
+    await server.fetch(`${URL_}/api/sync/${code}`, { method: 'PUT', body: JSON.stringify({ baseVersion: 0, data: DATA({ pois: [POI({ id: 's', name: 'Partagé' })] }) }) });
+    const { view } = await (await server.fetch(`${URL_}/api/sync/${code}/share`, { method: 'POST' })).json();
+    return { server, view };
+  }
+
+  test('données du lien affichées, rien n’est écrit dans le navigateur', async () => {
+    const { server, view } = await shared();
+    const own = DATA({ pois: [POI({ id: 'mine', name: 'À moi' })] });
+    const app = await boot({ syncUrl: URL_, fetch: server.fetch, search: `?vue=${view}`, storage: { 'minecarte:data': own } });
+    await until(() => app.store.data.pois.length === 1);
+    expect(app.store.data.pois.map((p) => p.name)).toEqual(['Partagé']);
+    expect([...$$('#poi-list .item-name')].map((el) => el.textContent)).toEqual(['Partagé']);
+    expect(document.body.classList.contains('readonly')).toBe(true);
+    expect($('#readonly').hidden).toBe(false);
+    expect($('#readonly').classList.contains('error')).toBe(false);
+    expect(text('#readonly-text')).toBe('👁 Lecture seule');
+    expect($('#readonly-exit').getAttribute('href')).toBe('/');
+    expect($('#sync-section').hidden).toBe(true);
+    expect(JSON.parse(localStorage.getItem('minecarte:data'))).toEqual(own);
+    expect(localStorage.getItem('minecarte:backups')).toBeNull();
+    expect(server.requests.at(-1)).toMatchObject({ method: 'GET', url: `${URL_}/api/view/${view}` });
+  });
+
+  test('lien révoqué ou inconnu : message d’erreur', async () => {
+    const { server } = await shared();
+    await boot({ syncUrl: URL_, fetch: server.fetch, search: '?vue=AAAAAAAA' });
+    await until(() => $('#readonly').classList.contains('error'));
+    expect(text('#readonly-text')).toBe('⚠ Lien inconnu ou révoqué.');
+  });
+
+  test('sans paramètre : carte normale, pas de mode lecture', async () => {
+    await boot();
+    expect(document.body.classList.contains('readonly')).toBe(false);
+    expect($('#readonly').hidden).toBe(true);
   });
 });

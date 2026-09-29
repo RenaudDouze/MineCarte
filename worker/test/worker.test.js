@@ -2,7 +2,7 @@
 import { describe, test, expect, vi, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import worker, {
-  kvKey, blobKey, referencedHashes, isValidPushRequest, MAX_BODY_BYTES, KV_TTL_SECONDS,
+  kvKey, blobKey, shareKey, viewKey, referencedHashes, isValidPushRequest, MAX_BODY_BYTES, KV_TTL_SECONDS,
 } from '../src/index.js';
 import { generateSyncCode, isValidSyncCode, normalizeSyncCode, ALPHABET, CODE_LENGTH } from '../src/code.js';
 
@@ -69,6 +69,8 @@ describe('fonctions exportées', () => {
   test('clés KV', () => {
     expect(kvKey('ABCDEFGH')).toBe('sync:ABCDEFGH');
     expect(blobKey('ABCDEFGH', 'ff')).toBe('blob:ABCDEFGH:ff');
+    expect(shareKey('ABCDEFGH')).toBe('share:ABCDEFGH');
+    expect(viewKey('ABCDEFGH')).toBe('view:ABCDEFGH');
   });
 
   test('constantes', () => {
@@ -106,7 +108,7 @@ describe('CORS', () => {
     expect(await res.text()).toBe('');
     expect(Object.fromEntries(res.headers)).toMatchObject({
       'access-control-allow-origin': 'https://renauddouze.github.io',
-      'access-control-allow-methods': 'GET, PUT, POST, OPTIONS',
+      'access-control-allow-methods': 'GET, PUT, POST, DELETE, OPTIONS',
       'access-control-allow-headers': 'Content-Type',
     });
   });
@@ -123,7 +125,7 @@ describe('CORS', () => {
   test('réponses JSON avec en-têtes CORS', async () => {
     const res = await call(env(), 'GET', '/api/sync/AAAAAAAA');
     expect(res.headers.get('Content-Type')).toBe('application/json');
-    expect(res.headers.get('Access-Control-Allow-Methods')).toBe('GET, PUT, POST, OPTIONS');
+    expect(res.headers.get('Access-Control-Allow-Methods')).toBe('GET, PUT, POST, DELETE, OPTIONS');
     expect(await res.json()).toEqual({ error: 'Code inconnu ou expiré.' });
   });
 });
@@ -144,6 +146,15 @@ describe('routage', () => {
       ['GET', `/api/sync/${code}/blob/${'a'.repeat(64)}`, 404, 'Not found'],
       ['PUT', `/api/sync/${code}/blob/${'a'.repeat(64)}`, 404, 'Not found'],
       ['GET', '/api/sync/0000', 400, 'Code invalide.'],
+      ['GET', `/api/sync/${code}/share`, 405, 'Method not allowed'],
+      ['PUT', `/api/sync/${code}/share`, 405, 'Method not allowed'],
+      ['POST', `/api/sync/${code}/share/x`, 404, 'Not found'],
+      ['POST', '/api/sync/0000/share', 400, 'Code invalide.'],
+      ['GET', '/api/view', 404, 'Not found'],
+      ['GET', '/api/view/AAAAAAAA/x', 404, 'Not found'],
+      ['GET', '/autre/view/AAAAAAAA', 404, 'Not found'],
+      ['GET', '/api/view/0000', 400, 'Lien invalide.'],
+      ['POST', '/api/view/AAAAAAAA', 405, 'Method not allowed'],
     ];
     for (const [method, path, status, error] of cases) {
       const res = await call(e, method, path);
@@ -260,4 +271,97 @@ test('anciennes images de fonds : supprimées quand plus aucune version ne les r
   // Données d'un client actuel : plus de fonds, plus d'images.
   await call(e, 'PUT', `/api/sync/${code}`, { baseVersion: 2, data: { pois: [] } });
   expect(e.SYNC_KV.map.has(`blob:${code}:${hash}`)).toBe(false);
+});
+
+describe('lien de lecture seule', () => {
+  const share = (e, code, method = 'POST') => call(e, method, `/api/sync/${code}/share`);
+  const puts = (e) => e.SYNC_KV.log.filter((op) => op[0] === 'put');
+
+  test('création, puis le même lien tant qu’il n’est pas révoqué', async () => {
+    const e = env();
+    const code = await create(e);
+    await call(e, 'PUT', `/api/sync/${code}`, { baseVersion: 0, data: { pois: [1] } });
+    const before = puts(e).length;
+    let res = await share(e, code.toLowerCase());
+    expect(res.status).toBe(201);
+    const { view } = await res.json();
+    expect(isValidSyncCode(view)).toBe(true);
+    expect(view).not.toBe(code);
+    expect(e.SYNC_KV.map.get(`view:${view}`)).toBe(code);
+    expect(e.SYNC_KV.map.get(`share:${code}`)).toBe(view);
+    // Sans expiration, et sans toucher l'enregistrement de synchronisation.
+    expect(puts(e).slice(before)).toEqual([['put', `view:${view}`, undefined], ['put', `share:${code}`, undefined]]);
+    res = await share(e, code);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ view });
+    expect(puts(e).length).toBe(before + 2);
+
+    res = await call(e, 'GET', `/api/view/${view.toLowerCase()}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ version: 1, data: { pois: [1] } });
+  });
+
+  test('code inconnu : pas de lien', async () => {
+    const e = env();
+    const res = await share(e, 'AAAAAAAA');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Code inconnu ou expiré.' });
+    expect(puts(e)).toEqual([]);
+  });
+
+  test('lecture : lien inconnu, révoqué ou code expiré', async () => {
+    const e = env();
+    const code = await create(e);
+    const { view } = await (await share(e, code)).json();
+    const read = () => call(e, 'GET', `/api/view/${view}`);
+    expect((await read()).status).toBe(200);
+    const logged = e.SYNC_KV.log.length;
+    let res = await call(e, 'GET', '/api/view/AAAAAAAA');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Lien inconnu ou révoqué.' });
+    // Lien inconnu : une seule lecture KV, pas de lecture d'un code « null ».
+    expect(e.SYNC_KV.log.slice(logged)).toEqual([['get', 'view:AAAAAAAA', undefined]]);
+    e.SYNC_KV.map.delete(`sync:${code}`);
+    res = await read();
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Lien inconnu ou révoqué.' });
+  });
+
+  test('révocation : l’ancien lien ne fonctionne plus, un nouveau peut être créé', async () => {
+    const e = env();
+    const code = await create(e);
+    const { view } = await (await share(e, code)).json();
+    let res = await share(e, code, 'DELETE');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ view: null });
+    expect(e.SYNC_KV.map.has(`view:${view}`)).toBe(false);
+    expect(e.SYNC_KV.map.has(`share:${code}`)).toBe(false);
+    expect((await call(e, 'GET', `/api/view/${view}`)).status).toBe(404);
+    const deletes = e.SYNC_KV.log.filter((op) => op[0] === 'delete').length;
+    res = await share(e, code, 'DELETE');
+    expect(await res.json()).toEqual({ view: null });
+    expect(e.SYNC_KV.log.filter((op) => op[0] === 'delete').length).toBe(deletes);
+    res = await share(e, code);
+    expect(res.status).toBe(201);
+    expect((await res.json()).view).not.toBe(view);
+  });
+
+  test('création : collision → nouvel essai, abandon après 5', async () => {
+    const e = env();
+    const code = await create(e);
+    e.SYNC_KV.map.set('view:AAAAAAAA', 'ZZZZZZZZ');
+    randomBytes([...Array(8).fill(0), ...Array(8).fill(1)]);
+    expect(await (await share(e, code)).json()).toEqual({ view: 'BBBBBBBB' });
+
+    const full = env();
+    const other = await create(full);
+    full.SYNC_KV.map.set('view:AAAAAAAA', 'ZZZZZZZZ');
+    randomBytes([]);
+    const before = puts(full).length;
+    const res = await share(full, other);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: 'Impossible de générer un lien, réessaie.' });
+    expect(puts(full).length).toBe(before);
+    expect(full.SYNC_KV.map.has(`share:${other}`)).toBe(false);
+  });
 });

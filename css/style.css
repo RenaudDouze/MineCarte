@@ -459,6 +459,25 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 }
 .toast[hidden] { display: none; }
 
+/* --- Lecture seule ---------------------------------------------------------- */
+
+body.readonly .edit { display: none !important; }
+.readonly-chip {
+  background: #26324a;
+  border: 1px solid #3b4d70;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.readonly-chip[hidden] { display: none; }
+.readonly-chip.error { background: #4a1f22; border-color: #7a3035; }
+.readonly-chip a { color: #9cc1ff; }
+.share-box { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.share-on { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.share-on[hidden] { display: none; }
+#share-url { width: 100%; font-size: 12px; }
+
 /* --- Petits écrans --------------------------------------------------------- */
 
 @media (max-width: 720px) {
