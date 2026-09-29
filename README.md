@@ -52,6 +52,10 @@ python3 -m http.server 8000
 - **Annuler / rétablir** : boutons ↶ ↷ en haut, ou `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Maj+Z`), pour les 50
   dernières modifications (y compris « Tout effacer » et un import). Une modification reçue d'un
   autre appareil vide l'historique, pour ne jamais défaire le travail des autres.
+- **Historique local** (Réglages) : une copie des données est faite automatiquement dans le
+  navigateur (au plus toutes les 10 minutes, et toujours avant un import, un « Tout effacer » ou
+  une restauration). Les 10 dernières sont listées avec leur date et leur contenu ; « Restaurer »
+  y revient, même après avoir fermé la page (et reste annulable).
 - **Tout afficher** : le bouton ⤢ sous le zoom cadre la carte sur tous les lieux et chemins de la
   dimension affichée.
 - **Sur téléphone** : le panneau s'ouvre avec ☰ et se referme en touchant la carte ; un appui
@@ -75,6 +79,7 @@ python3 -m http.server 8000
 | `js/terrain.js` | Fond des dimensions et grille (`L.GridLayer`) |
 | `js/icons.js` | Chargement et recherche des icônes d'items |
 | `js/undo.js` | Annuler / rétablir (piles d'instantanés) |
+| `js/backups.js` | Historique local (copies automatiques dans le navigateur) |
 | `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
 | `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |
 | `worker/` | Worker Cloudflare de synchronisation |

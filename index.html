@@ -91,6 +91,10 @@
           <button type="button" id="reset" class="danger">Tout effacer</button>
         </div>
 
+        <h3>Historique local</h3>
+        <p class="hint">Copie automatique des données dans ce navigateur (au plus toutes les 10 minutes, et avant un import, un effacement ou une restauration). Les 10 dernières sont gardées.</p>
+        <ul id="backup-list" class="list backups"></ul>
+
         <h3>Aide</h3>
         <ul class="help">
           <li><b>Clic droit</b> (appui long au doigt) sur la carte : ajouter un lieu, démarrer un chemin, copier les coordonnées.</li>
@@ -205,6 +209,7 @@
   <script src="js/store.js"></script>
   <script src="js/sync.js"></script>
   <script src="js/undo.js"></script>
+  <script src="js/backups.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

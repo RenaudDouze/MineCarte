@@ -1120,6 +1120,7 @@
       if (!confirm('Remplacer toutes les données actuelles par celles du fichier ?')) return;
       cancelMode();
       map.closePopup();
+      saveBackup(true);
       store.replaceAll(raw);
       toast(`${store.data.pois.length} lieu(x) et ${store.data.paths.length} chemin(s) importés.`);
     } catch (err) {
@@ -1129,9 +1130,10 @@
 
   $('#reset').addEventListener('click', () => {
     const cloudNote = cloud.code ? ' Les données seront aussi effacées du cloud et des appareils reliés.' : '';
-    if (!confirm(`Effacer tous les lieux et chemins ? Cette action est irréversible (pensez à exporter).${cloudNote}`)) return;
+    if (!confirm(`Effacer tous les lieux et chemins ? Ils restent récupérables avec Annuler ou l'historique local.${cloudNote}`)) return;
     cancelMode();
     map.closePopup();
+    saveBackup(true);
     store.replaceAll({ seed: store.data.seed });
   });
 
@@ -1228,6 +1230,39 @@
     store.replaceAll(JSON.parse(snapshot), 'history');
     toast(message);
   }
+
+  // --- Historique local -----------------------------------------------------------------------
+
+  const backups = new Backups(localStorage, () => Date.now());
+
+  function saveBackup(force) {
+    if (backups.save(store.data, force)) renderBackups();
+  }
+
+  function renderBackups() {
+    const list = backups.list();
+    $('#backup-list').replaceChildren(...(list.length ? list.map((entry) => {
+      const when = new Date(entry.time).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      return h('li', { class: 'item' },
+        h('span', { class: 'item-main' },
+          h('span', { class: 'item-name' }, when),
+          h('span', { class: 'item-sub' }, Backups.summary(entry.data))),
+        h('button', { type: 'button', onclick: () => restoreBackup(entry, when) }, 'Restaurer'));
+    }) : [h('li', { class: 'empty' }, 'Aucune copie pour l\'instant.')]));
+  }
+
+  function restoreBackup(entry, when) {
+    if (!confirm(`Revenir à l'état du ${when} ? L'état actuel est d'abord copié dans l'historique.`)) return;
+    cancelMode();
+    map.closePopup();
+    saveBackup(true);
+    store.replaceAll(entry.data);
+    toast(`État du ${when} restauré.`);
+  }
+
+  store.onChange(() => saveBackup(false));
+  saveBackup(false);
+  renderBackups();
 
   function undoChange() {
     restore(undo.undo(), 'Modification annulée.');
