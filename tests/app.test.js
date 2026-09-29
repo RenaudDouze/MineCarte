@@ -88,9 +88,9 @@ describe('démarrage et options', () => {
     expect(layers(app, (l) => l instanceof Terrain.GridOverlay)).toHaveLength(0);
     expect(app.map.getContainer().classList.contains('hide-labels')).toBe(true);
     app = await boot({ storage: { 'minecarte:options': '{pas du json' } });
-    expect(app.state.options).toEqual({ grid: true, labels: true, links: true, allDims: false });
+    expect(app.state.options).toEqual({ grid: true, labels: true, links: true, allDims: false, hiddenCats: [] });
     app = await boot({ storage: { 'minecarte:options': { labels: false } } });
-    expect(app.state.options).toEqual({ grid: true, labels: false, links: true, allDims: false });
+    expect(app.state.options).toEqual({ grid: true, labels: false, links: true, allDims: false, hiddenCats: [] });
   });
 
   test('changer une option : enregistrée et appliquée', async () => {
@@ -516,6 +516,102 @@ describe('dialogue POI', () => {
     $('#add-poi').click();
     $('#poi-dialog [data-close]').click();
     expect($('#poi-dialog').open).toBe(false);
+  });
+});
+
+describe('catégories', () => {
+  const chips = () => $$('#cat-filter .cat-chip');
+  const names = () => $$('#poi-list .item-name').map((e) => e.textContent);
+
+  test('choix dans le dialogue, affichage dans la liste et la popup', async () => {
+    const app = await boot();
+    $('#add-poi').click();
+    const f = $('#poi-form').elements;
+    expect([...f.category.options].map((o) => [o.value, o.textContent])).toEqual([
+      ['', 'Sans catégorie'],
+      ...Store.CATEGORIES.map((c) => [c.id, `${c.emoji} ${c.label}`]),
+    ]);
+    expect(f.category.value).toBe('');
+    f.label.value = 'Champ';
+    f.category.value = 'farm';
+    submit($('#poi-form'));
+    const poi = app.store.data.pois[0];
+    expect(poi.category).toBe('farm');
+    expect(text('#poi-list .item-sub')).toBe('🌾 Ferme · X 0 · Y 64 · Z 0');
+    expect(text('.leaflet-popup-content .popup-cat')).toBe('🌾 Ferme');
+    // Modifier : la catégorie est reprise.
+    button('Modifier', popup()).click();
+    expect(f.category.value).toBe('farm');
+  });
+
+  test('sans catégorie : ni mention dans la liste ni dans la popup', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', x: 1, y: 2, z: 3 })] });
+    expect(text('#poi-list .item-sub')).toBe('X 1 · Y 2 · Z 3');
+    app.state.markers.get('a').fire('click');
+    expect(popup().querySelector('.popup-cat')).toBeNull();
+  });
+
+  test('filtre : une pastille par catégorie utilisée, masquer / afficher', async () => {
+    const app = await withData({ pois: [
+      POI({ id: 'a', name: 'Maison', category: 'base', links: ['b'] }),
+      POI({ id: 'b', name: 'Blé', category: 'farm', x: 50 }),
+      POI({ id: 'c', name: 'Carotte', category: 'farm', x: 90 }),
+      POI({ id: 'd', name: 'Divers', x: 20 }),
+    ] });
+    expect($('#cat-filter').hidden).toBe(false);
+    expect(chips().map((c) => c.textContent)).toEqual(['Sans catégorie (1)', '🏠 Base (1)', '🌾 Ferme (2)']);
+    expect(chips().every((c) => c.getAttribute('aria-pressed') === 'true')).toBe(true);
+    expect(chips()[2].title).toBe('Masquer cette catégorie');
+    expect(layers(app, (l) => l instanceof L.Polyline && l.options.pane === 'linkPane')).toHaveLength(1);
+
+    chips()[2].click();
+    expect(app.state.options.hiddenCats).toEqual(['farm']);
+    expect(JSON.parse(localStorage.getItem('minecarte:options')).hiddenCats).toEqual(['farm']);
+    expect(names()).toEqual(['Divers', 'Maison']);
+    expect([...app.state.markers.keys()].sort()).toEqual(['a', 'd']);
+    // Lien vers un lieu masqué : pas de trait.
+    expect(layers(app, (l) => l instanceof L.Polyline && l.options.pane === 'linkPane')).toHaveLength(0);
+    const off = chips()[2];
+    expect(off.className).toBe('cat-chip off');
+    expect(off.getAttribute('aria-pressed')).toBe('false');
+    expect(off.title).toBe('Afficher cette catégorie');
+
+    chips()[0].click();
+    expect(app.state.options.hiddenCats).toEqual(['farm', '']);
+    expect(names()).toEqual(['Maison']);
+    chips()[2].click();
+    expect(app.state.options.hiddenCats).toEqual(['']);
+    expect(names()).toEqual(['Blé', 'Carotte', 'Maison']);
+  });
+
+  test('une seule catégorie utilisée : pas de filtre', async () => {
+    await withData({ pois: [POI({ id: 'a', category: 'mine' }), POI({ id: 'b', category: 'mine' })] });
+    expect($('#cat-filter').hidden).toBe(true);
+    expect(chips()).toHaveLength(1);
+  });
+
+  test('catégories masquées retrouvées au démarrage', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', category: 'mine' }), POI({ id: 'b' })] }, { storage: { 'minecarte:options': { hiddenCats: ['mine'] } } });
+    expect([...app.state.markers.keys()]).toEqual(['b']);
+  });
+
+  test('enregistrer un lieu dans une catégorie masquée la réaffiche', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', category: 'mine' }), POI({ id: 'b' })] }, { storage: { 'minecarte:options': { hiddenCats: ['mine', 'farm'] } } });
+    $('#add-poi').click();
+    const f = $('#poi-form').elements;
+    f.label.value = 'Galerie';
+    f.category.value = 'mine';
+    submit($('#poi-form'));
+    expect(app.state.options.hiddenCats).toEqual(['farm']);
+    expect(JSON.parse(localStorage.getItem('minecarte:options')).hiddenCats).toEqual(['farm']);
+    expect(app.state.markers.has('a')).toBe(true);
+  });
+
+  test('portail : la catégorie est reprise', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'Porte', category: 'portal' })] });
+    app.state.markers.get('a').fire('click');
+    button('Portail Nether', popup()).click();
+    expect($('#poi-form').elements.category.value).toBe('portal');
   });
 });
 

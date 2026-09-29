@@ -30,7 +30,7 @@
   // --- Utilitaires -----------------------------------------------------------
 
   function loadOptions() {
-    const defaults = { grid: true, labels: true, links: true, allDims: false };
+    const defaults = { grid: true, labels: true, links: true, allDims: false, hiddenCats: [] };
     try {
       return Object.assign(defaults, JSON.parse(localStorage.getItem(OPTIONS_KEY) || '{}'));
     } catch {
@@ -170,13 +170,45 @@
       : h('span', { class: 'dot', style: `background:${poi.color}` });
   }
 
+  // --- Catégories -------------------------------------------------------------------
+
+  const CATEGORIES = Store.CATEGORIES;
+  const categoryOf = (poi) => CATEGORIES.find((c) => c.id === poi.category);
+  const isShown = (poi) => !state.options.hiddenCats.includes(poi.category);
+
+  // Filtre : une pastille par catégorie utilisée (et « Sans catégorie »),
+  // seulement s'il y en a au moins deux.
+  function renderCategoryFilter() {
+    const used = [{ id: '', emoji: '', label: 'Sans catégorie' }, ...CATEGORIES]
+      .map((c) => ({ ...c, count: store.data.pois.filter((p) => p.category === c.id).length }))
+      .filter((c) => c.count);
+    const box = $('#cat-filter');
+    box.hidden = used.length < 2;
+    box.replaceChildren(...used.map((c) => {
+      const hidden = state.options.hiddenCats.includes(c.id);
+      return h('button', {
+        type: 'button',
+        class: `cat-chip${hidden ? ' off' : ''}`,
+        'aria-pressed': String(!hidden),
+        title: hidden ? 'Afficher cette catégorie' : 'Masquer cette catégorie',
+        onclick: () => {
+          state.options.hiddenCats = hidden
+            ? state.options.hiddenCats.filter((id) => id !== c.id)
+            : [...state.options.hiddenCats, c.id];
+          saveOptions();
+          render();
+        },
+      }, `${c.emoji ? `${c.emoji} ` : ''}${c.label} (${c.count})`);
+    }));
+  }
+
   function render() {
     poiLayer.clearLayers();
     linkLayer.clearLayers();
     pathLayer.clearLayers();
     state.markers.clear();
 
-    const pois = store.data.pois.filter((p) => p.dim === state.dim);
+    const pois = store.data.pois.filter((p) => p.dim === state.dim && isShown(p));
     for (const poi of pois) {
       const marker = L.marker(toLatLng(poi.x, poi.z), {
         icon: poiIcon(poi),
@@ -195,7 +227,7 @@
       for (const poi of pois) {
         for (const id of poi.links) {
           const other = store.getPoi(id);
-          if (!other || other.dim !== state.dim || other.id < poi.id) continue;
+          if (!other || other.dim !== state.dim || !isShown(other) || other.id < poi.id) continue;
           L.polyline([toLatLng(poi.x, poi.z), toLatLng(other.x, other.z)], {
             pane: 'linkPane',
             color: '#ffffff',
@@ -223,6 +255,7 @@
       line.addTo(pathLayer);
     }
 
+    renderCategoryFilter();
     renderLists();
   }
 
@@ -234,17 +267,20 @@
     const query = $('#poi-search').value.trim().toLowerCase();
     const allDims = state.options.allDims;
     const pois = store.data.pois
-      .filter((p) => (allDims || p.dim === state.dim) && p.name.toLowerCase().includes(query))
+      .filter((p) => (allDims || p.dim === state.dim) && isShown(p) && p.name.toLowerCase().includes(query))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 
     const poiList = $('#poi-list');
-    poiList.replaceChildren(...pois.map((poi) => h('li', { class: 'item', onclick: () => focusPoi(poi.id) },
-      poiDot(poi),
-      h('span', { class: 'item-main' },
-        h('span', { class: 'item-name' }, poi.name),
-        h('span', { class: 'item-sub' }, `X ${poi.x} · Y ${poi.y} · Z ${poi.z}`)),
-      allDims && poi.dim !== state.dim ? dimBadge(poi.dim) : null,
-      poi.links.length ? h('span', { class: 'item-links', title: 'Liens' }, `🔗 ${poi.links.length}`) : null)));
+    poiList.replaceChildren(...pois.map((poi) => {
+      const cat = categoryOf(poi);
+      return h('li', { class: 'item', onclick: () => focusPoi(poi.id) },
+        poiDot(poi),
+        h('span', { class: 'item-main' },
+          h('span', { class: 'item-name' }, poi.name),
+          h('span', { class: 'item-sub' }, `${cat ? `${cat.emoji} ${cat.label} · ` : ''}X ${poi.x} · Y ${poi.y} · Z ${poi.z}`)),
+        allDims && poi.dim !== state.dim ? dimBadge(poi.dim) : null,
+        poi.links.length ? h('span', { class: 'item-links', title: 'Liens' }, `🔗 ${poi.links.length}`) : null);
+    }));
     if (!pois.length) {
       poiList.append(h('li', { class: 'empty' }, query ? 'Aucun résultat.' : 'Aucun lieu. Clic droit sur la carte ou « + Lieu ».'));
     }
@@ -265,11 +301,13 @@
 
   function openPoiPopup(poi) {
     const conv = convert(poi.dim, poi.x, poi.z);
+    const cat = categoryOf(poi);
     const links = poi.links.map((id) => store.getPoi(id)).filter(Boolean);
 
     const content = h('div', { class: 'poi-popup' },
       h('div', { class: 'popup-title' },
         poiDot(poi), poi.name),
+      cat ? h('div', { class: 'popup-cat' }, `${cat.emoji} ${cat.label}`) : null,
       h('div', { class: 'popup-coords' },
         h('span', {}, `X ${poi.x}`), h('span', { class: 'y', title: 'Hauteur (information)' }, `Y ${poi.y}`), h('span', {}, `Z ${poi.z}`)),
       conv ? h('div', { class: 'popup-sub' }, `≈ ${DIM_LABELS[conv.dim]} : X ${conv.x}, Z ${conv.z}`) : null,
@@ -294,6 +332,7 @@
             name: `${poi.name} (${DIM_LABELS[conv.dim]})`,
             color: poi.color,
             icon: poi.icon,
+            category: poi.category,
             dim: conv.dim,
             x: conv.x,
             y: poi.y,
@@ -391,11 +430,12 @@
   function openPoiDialog(poi) {
     const form = $('#poi-form');
     const center = fromLatLng(map.getCenter());
-    const data = Object.assign({ name: '', color: '#e53935', icon: '', dim: state.dim, x: center.x, y: 64, z: center.z, links: [] }, poi);
+    const data = Object.assign({ name: '', color: '#e53935', icon: '', category: '', dim: state.dim, x: center.x, y: 64, z: center.z, links: [] }, poi);
     $('#poi-dialog-title').textContent = data.id ? 'Modifier le lieu' : 'Nouveau lieu';
     form.elements.id.value = data.id || '';
     form.elements.label.value = data.name;
     form.elements.color.value = data.color;
+    form.elements.category.value = data.category;
     form.elements.dim.value = data.dim;
     form.elements.x.value = data.x;
     form.elements.y.value = data.y;
@@ -409,6 +449,10 @@
     form.elements.label.focus();
     form.elements.label.select();
   }
+
+  $('#poi-form').elements.category.replaceChildren(
+    h('option', { value: '' }, 'Sans catégorie'),
+    ...CATEGORIES.map((c) => h('option', { value: c.id }, `${c.emoji} ${c.label}`)));
 
   $('#poi-link-filter').addEventListener('input', () => {
     renderLinkPicker(poiDialogLinks, $('#poi-form').elements.id.value);
@@ -481,8 +525,15 @@
       y: f.y.value,
       z: f.z.value,
       icon: f.icon.value,
+      category: f.category.value,
       links: [...poiDialogLinks],
     });
+    // Un lieu enregistré dans une catégorie masquée la fait réapparaître.
+    if (state.options.hiddenCats.includes(poi.category)) {
+      state.options.hiddenCats = state.options.hiddenCats.filter((id) => id !== poi.category);
+      saveOptions();
+      render();
+    }
     $('#poi-dialog').close();
     focusPoi(poi.id);
   });
