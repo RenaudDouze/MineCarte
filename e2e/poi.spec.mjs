@@ -46,7 +46,8 @@ test('POI liés : navigation vers un autre POI, même dans une autre dimension',
   await expect(popup('Portail \\(Nether\\)')).toBeVisible();
   await popup('Portail \\(Nether\\)').locator('.link-btn').click();
   await expect(page.locator('body')).toHaveAttribute('data-dim', 'overworld');
-  await expect(popup('Portail')).toBeVisible();
+  await expect(popup('Portail').last()).toBeVisible();
+  await expect(popup('Portail')).toHaveCount(1);
 });
 
 test('icône d’item choisie dans la liste', async ({ page }) => {
