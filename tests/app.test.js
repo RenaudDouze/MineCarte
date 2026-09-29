@@ -1080,6 +1080,48 @@ describe('recherche de coordonnées', () => {
   });
 });
 
+describe('tout afficher', () => {
+  const fitButton = () => $('.leaflet-control .fit-all');
+
+  test('bouton sous le zoom', async () => {
+    await boot();
+    const b = fitButton();
+    expect(b.title).toBe('Afficher tous les lieux et chemins');
+    expect(b.getAttribute('aria-label')).toBe('Afficher tous les lieux et chemins');
+    expect(b.getAttribute('role')).toBe('button');
+    expect(b.textContent).toBe('⤢');
+    expect(b.closest('.leaflet-top.leaflet-left')).not.toBeNull();
+  });
+
+  test('cadre les lieux et chemins de la dimension affichée', async () => {
+    const app = await withData({
+      pois: [POI({ id: 'a', x: 100, z: -50 }), POI({ id: 'n', dim: 'nether', x: 9999, z: 9999 })],
+      paths: [PATH({ id: 'r', points: [[-200, 0], [0, 300]] })],
+    });
+    const fit = vi.spyOn(app.map, 'fitBounds');
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    fitButton().dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(fit.mock.calls[0][0]).toEqual(L.latLngBounds(ll(-200, -50), ll(100, 300)).pad(0.1));
+    expect(fit.mock.calls[0][1]).toMatchObject({ maxZoom: 2, animate: false });
+  });
+
+  test('dimension vide : message, carte inchangée', async () => {
+    const app = await withData({ pois: [POI({ id: 'n', dim: 'nether' })] });
+    const fit = vi.spyOn(app.map, 'fitBounds');
+    fitButton().click();
+    expect(fit).not.toHaveBeenCalled();
+    expect(text('#toast')).toBe('Aucun lieu ni chemin dans cette dimension.');
+  });
+
+  test('pendant un tracé, le clic n’ajoute pas de point', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    $('#new-path').click();
+    fitButton().click();
+    expect(app.state.draw.points).toEqual([]);
+  });
+});
+
 describe('panneau latéral', () => {
   test('masquer / afficher, onglets', async () => {
     const app = await boot();

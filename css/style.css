@@ -300,6 +300,7 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
 .leaflet-bar a { background: var(--panel); color: var(--text); border-bottom-color: var(--border); }
 .leaflet-bar a:hover { background: var(--panel-2); color: var(--text); }
 .leaflet-bar a.leaflet-disabled { background: var(--panel); color: #555; }
+.fit-all { font-size: 17px; font-weight: 600; }
 
 /* Menu contextuel */
 .context-menu {
