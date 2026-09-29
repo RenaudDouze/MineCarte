@@ -47,6 +47,9 @@ python3 -m http.server 8000
 - **Aller à** des coordonnées X / Z (Y optionnel) : depuis l'emplacement trouvé, créer un lieu
   (coordonnées pré-remplies), commencer un chemin, ajouter le point au bout d'un chemin existant
   ou au tracé en cours.
+- **Annuler / rétablir** : boutons ↶ ↷ en haut, ou `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Maj+Z`), pour les 50
+  dernières modifications (y compris « Tout effacer » et un import). Une modification reçue d'un
+  autre appareil vide l'historique, pour ne jamais défaire le travail des autres.
 - **Tout afficher** : le bouton ⤢ sous le zoom cadre la carte sur tous les lieux et chemins de la
   dimension affichée.
 - **URL partageable** (`#dimension/x/z/zoom`).
@@ -65,6 +68,7 @@ python3 -m http.server 8000
 | `js/noise.js` | Hachage déterministe (texture du fond) |
 | `js/terrain.js` | Fond des dimensions et grille (`L.GridLayer`) |
 | `js/icons.js` | Chargement et recherche des icônes d'items |
+| `js/undo.js` | Annuler / rétablir (piles d'instantanés) |
 | `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
 | `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |
 | `worker/` | Worker Cloudflare de synchronisation |

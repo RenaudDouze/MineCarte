@@ -21,6 +21,7 @@ export const targets = {
   'js/icons.js': ['tests/icons.test.js'],
   'js/config.js': ['tests/config.test.js'],
   'js/sync.js': ['tests/sync.test.js'],
+  'js/undo.js': ['tests/undo.test.js'],
   'worker/src/index.js': ['worker/test/worker.test.js'],
   'worker/src/code.js': ['worker/test/worker.test.js'],
 };

@@ -46,7 +46,8 @@ test('POI liés : navigation vers un autre POI, même dans une autre dimension',
   await expect(popup('Portail \\(Nether\\)')).toBeVisible();
   await popup('Portail \\(Nether\\)').locator('.link-btn').click();
   await expect(page.locator('body')).toHaveAttribute('data-dim', 'overworld');
-  await expect(popup('Portail')).toBeVisible();
+  await expect(popup('Portail').last()).toBeVisible();
+  await expect(popup('Portail')).toHaveCount(1);
 });
 
 test('icône d’item choisie dans la liste', async ({ page }) => {
@@ -77,4 +78,20 @@ test('catégories : choix dans le dialogue et filtre', async ({ page }) => {
   await expect(page.locator('#poi-list .item-name')).toHaveText(['Maison']);
   await page.locator('.cat-chip', { hasText: 'Ferme' }).click();
   await expect(page.locator('#poi-list .item-name')).toHaveText(['Champ de blé', 'Maison']);
+});
+
+test('annuler / rétablir une suppression', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '+ Lieu' }).click();
+  await page.locator('#poi-form [name="label"]').fill('Temple');
+  await page.locator('#poi-form button[type="submit"]').click();
+  page.once('dialog', (d) => d.accept());
+  await page.locator('.leaflet-popup-content').getByRole('button', { name: 'Supprimer' }).click();
+  await expect(page.locator('#poi-list .item-name')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Annuler' }).click();
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Temple']);
+  await page.keyboard.press('Control+y');
+  await expect(page.locator('#poi-list .item-name')).toHaveCount(0);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Temple']);
 });

@@ -1176,6 +1176,101 @@ describe('recherche de coordonnées', () => {
   });
 });
 
+describe('annuler / rétablir', () => {
+  const names = (app) => app.store.data.pois.map((p) => p.name);
+
+  test('boutons : désactivés au départ, actifs après une modification', async () => {
+    const app = await boot();
+    expect($('#undo-btn').disabled).toBe(true);
+    expect($('#redo-btn').disabled).toBe(true);
+    expect($('#undo-btn').title).toBe('Annuler (Ctrl+Z)');
+    expect($('#redo-btn').title).toBe('Rétablir (Ctrl+Y)');
+    app.store.savePoi({ name: 'A' });
+    expect($('#undo-btn').disabled).toBe(false);
+    expect($('#redo-btn').disabled).toBe(true);
+  });
+
+  test('annuler une création, une suppression ; rétablir', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'A' })] });
+    app.store.savePoi({ name: 'B' });
+    app.store.deletePoi('a');
+    expect(names(app)).toEqual(['B']);
+    $('#undo-btn').click();
+    expect(names(app)).toEqual(['A', 'B']);
+    expect(text('#toast')).toBe('Modification annulée.');
+    $('#undo-btn').click();
+    expect(names(app)).toEqual(['A']);
+    expect($('#undo-btn').disabled).toBe(true);
+    expect($('#redo-btn').disabled).toBe(false);
+    $('#redo-btn').click();
+    expect(names(app)).toEqual(['A', 'B']);
+    expect(text('#toast')).toBe('Modification rétablie.');
+    // Les états restaurés sont enregistrés comme n'importe quelle modification.
+    expect(JSON.parse(localStorage.getItem('minecarte:data')).pois.map((p) => p.name)).toEqual(['A', 'B']);
+    $('#redo-btn').click();
+    expect(names(app)).toEqual(['B']);
+    expect($('#redo-btn').disabled).toBe(true);
+    // Plus rien à rétablir : sans effet.
+    $('#redo-btn').disabled = false;
+    $('#redo-btn').click();
+    expect(names(app)).toEqual(['B']);
+  });
+
+  test('« Tout effacer » peut être annulé', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'A' })] });
+    vi.stubGlobal('confirm', () => true);
+    $('#reset').click();
+    expect(app.store.data.pois).toEqual([]);
+    $('#undo-btn').click();
+    expect(names(app)).toEqual(['A']);
+  });
+
+  test('raccourcis : Ctrl+Z, Ctrl+Y, Ctrl+Maj+Z, Cmd+Z', async () => {
+    const app = await boot();
+    app.store.savePoi({ name: 'A' });
+    app.store.savePoi({ name: 'B' });
+    expect(key('z', { ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(names(app)).toEqual(['A']);
+    key('z', { metaKey: true });
+    expect(names(app)).toEqual([]);
+    expect(key('y', { ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(names(app)).toEqual(['A']);
+    expect(key('Z', { ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(true);
+    expect(names(app)).toEqual(['A', 'B']);
+    // Autres touches avec Ctrl : ignorées.
+    expect(key('s', { ctrlKey: true }).defaultPrevented).toBe(false);
+    // Sans Ctrl : rien.
+    key('z');
+    expect(names(app)).toEqual(['A', 'B']);
+    // En saisie : laissé au champ.
+    key('z', { ctrlKey: true }, $('#poi-search'));
+    expect(names(app)).toEqual(['A', 'B']);
+  });
+
+  test('pendant un tracé, Ctrl+Z retire un point ; les boutons annulent le mode', async () => {
+    const app = await boot();
+    app.store.savePoi({ name: 'A' });
+    $('#new-path').click();
+    app.map.fire('click', { latlng: ll(0, 0) });
+    app.map.fire('click', { latlng: ll(5, 0) });
+    key('z', { ctrlKey: true });
+    expect(app.state.draw.points).toEqual([[0, 0]]);
+    expect(names(app)).toEqual(['A']);
+    $('#undo-btn').click();
+    expect(app.state.mode).toBe(null);
+    expect(names(app)).toEqual([]);
+  });
+
+  test('modification venue d’un autre appareil : historique vidé', async () => {
+    const app = await boot();
+    app.store.savePoi({ name: 'A' });
+    app.store.replaceAll({ pois: [POI({ id: 'r', name: 'Distant' })] }, 'remote');
+    expect($('#undo-btn').disabled).toBe(true);
+    key('z', { ctrlKey: true });
+    expect(names(app)).toEqual(['Distant']);
+  });
+});
+
 describe('tout afficher', () => {
   const fitButton = () => $('.leaflet-control .fit-all');
 
