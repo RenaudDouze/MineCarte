@@ -12,6 +12,10 @@
     <button id="toggle-sidebar" class="icon-btn" title="Afficher / masquer le panneau" aria-label="Panneau">☰</button>
     <h1>MineCarte</h1>
     <button type="button" id="sync-badge" class="sync-badge" hidden title="Synchronisation cloud">☁</button>
+    <div class="history-btns">
+      <button type="button" id="undo-btn" class="icon-btn" title="Annuler (Ctrl+Z)" aria-label="Annuler" disabled>↶</button>
+      <button type="button" id="redo-btn" class="icon-btn" title="Rétablir (Ctrl+Y)" aria-label="Rétablir" disabled>↷</button>
+    </div>
     <nav class="dims" aria-label="Dimensions">
       <button type="button" data-dim="overworld" class="dim-btn dim-overworld">Overworld</button>
       <button type="button" data-dim="nether" class="dim-btn dim-nether">Nether</button>
@@ -201,6 +205,7 @@
   <script src="js/icons.js"></script>
   <script src="js/store.js"></script>
   <script src="js/sync.js"></script>
+  <script src="js/undo.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

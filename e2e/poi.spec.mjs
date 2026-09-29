@@ -78,3 +78,19 @@ test('catégories : choix dans le dialogue et filtre', async ({ page }) => {
   await page.locator('.cat-chip', { hasText: 'Ferme' }).click();
   await expect(page.locator('#poi-list .item-name')).toHaveText(['Champ de blé', 'Maison']);
 });
+
+test('annuler / rétablir une suppression', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '+ Lieu' }).click();
+  await page.locator('#poi-form [name="label"]').fill('Temple');
+  await page.locator('#poi-form button[type="submit"]').click();
+  page.once('dialog', (d) => d.accept());
+  await page.locator('.leaflet-popup-content').getByRole('button', { name: 'Supprimer' }).click();
+  await expect(page.locator('#poi-list .item-name')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Annuler' }).click();
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Temple']);
+  await page.keyboard.press('Control+y');
+  await expect(page.locator('#poi-list .item-name')).toHaveCount(0);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Temple']);
+});

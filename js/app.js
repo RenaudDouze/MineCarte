@@ -856,6 +856,16 @@
     } else if ((e.key === 'Backspace' || (e.key === 'z' && (e.ctrlKey || e.metaKey))) && state.mode === 'draw') {
       e.preventDefault();
       undoDrawPoint();
+    } else if ((e.ctrlKey || e.metaKey) && !state.mode) {
+      // Ctrl+Z : annuler ; Ctrl+Y ou Ctrl+Maj+Z : rétablir.
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undoChange();
+      } else if (k === 'y' || k === 'z') {
+        e.preventDefault();
+        redoChange();
+      }
     }
   });
 
@@ -1094,6 +1104,43 @@
     if (!confirm('Déconnecter cet appareil du code ? Les données restent sur cet appareil et dans le cloud.')) return;
     cloud.leave();
   });
+
+  // --- Annuler / rétablir ------------------------------------------------------------------------
+
+  const undo = new UndoStack(JSON.stringify(store.data));
+
+  function updateUndoButtons() {
+    $('#undo-btn').disabled = !undo.canUndo;
+    $('#redo-btn').disabled = !undo.canRedo;
+  }
+
+  // Les états restaurés passent par replaceAll(…, 'history') : ils sont
+  // synchronisés comme une modification locale, sans être réempilés.
+  store.onChange((data, source) => {
+    const snapshot = JSON.stringify(data);
+    if (source === 'remote') undo.reset(snapshot);
+    else if (source !== 'history') undo.record(snapshot);
+    updateUndoButtons();
+  });
+
+  function restore(snapshot, message) {
+    if (snapshot === null) return;
+    cancelMode();
+    map.closePopup();
+    store.replaceAll(JSON.parse(snapshot), 'history');
+    toast(message);
+  }
+
+  function undoChange() {
+    restore(undo.undo(), 'Modification annulée.');
+  }
+
+  function redoChange() {
+    restore(undo.redo(), 'Modification rétablie.');
+  }
+
+  $('#undo-btn').addEventListener('click', undoChange);
+  $('#redo-btn').addEventListener('click', redoChange);
 
   // --- Démarrage ------------------------------------------------------------------------------
 

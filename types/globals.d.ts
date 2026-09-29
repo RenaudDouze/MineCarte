@@ -4,6 +4,7 @@ declare const Utils: any;
 declare const Terrain: any;
 declare const Icons: any;
 declare const Store: any;
+declare const UndoStack: any;
 declare const CloudSync: any;
 declare const DIMENSIONS: string[];
 interface Window {
@@ -12,6 +13,7 @@ interface Window {
   Terrain: any;
   Icons: any;
   Store: any;
+  UndoStack: any;
   CloudSync: any;
   DIMENSIONS: string[];
   MINECARTE_CONFIG: { syncUrl?: string };
