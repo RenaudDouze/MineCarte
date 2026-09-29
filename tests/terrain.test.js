@@ -21,7 +21,7 @@ const COLORS = { void: '#0c0918', stone: '#dcdca2', obsidian: '#1b1128', bedrock
 
 // Pixel attendu : couleur × relief (variation de teinte par carré de 4 blocs).
 function shaded(color, x, z) {
-  const shade = 0.93 + 0.1 * N.hash2(x >> 2, z >> 2, SEED + 7);
+  const shade = 0.97 + 0.05 * N.hash2(x >> 2, z >> 2, SEED + 7);
   const rgb = typeof color === 'string' ? hex(color) : color;
   return [...new Uint8ClampedArray(rgb.map((c) => c * shade))];
 }
@@ -41,42 +41,40 @@ function blockPixel(dimension, x, z) {
 // Référence (« golden master ») : nombre d'échantillons par couleur sur les
 // grilles de histogram(). À régénérer volontairement si l'aspect du fond change.
 const OVERWORLD_HISTOGRAM = {
-  '#1f3478': 16090,
-  '#2f4d1e': 4044,
-  '#2f52b0': 15545,
-  '#3d5aa8': 2955,
-  '#3f6b57': 4399,
-  '#3f6fd6': 1918,
-  '#3f8a36': 2295,
-  '#4d6b45': 2314,
-  '#4f8a14': 2887,
-  '#5c9c4a': 2291,
-  '#8a8a8a': 4037,
-  '#8db360': 7505,
-  '#9fb8ae': 2618,
-  '#a3c060': 3247,
-  '#bdb25f': 5504,
-  '#c46a36': 797,
-  '#dde6ee': 4010,
-  '#e3d79b': 2462,
-  '#e8c56d': 1828,
-  '#e8e6d8': 469,
-  '#eef4f8': 3386,
+  '#7a8783': 16090,
+  '#7d8b72': 4518,
+  '#7d8c8d': 15545,
+  '#7f8e8b': 2955,
+  '#80917d': 4832,
+  '#809677': 2583,
+  '#829179': 2620,
+  '#839671': 3246,
+  '#859a7a': 2502,
+  '#8d9686': 4037,
+  '#8e9e7e': 8380,
+  '#919f8c': 2925,
+  '#92a07e': 3613,
+  '#969e7e': 6080,
+  '#989177': 820,
+  '#9ca798': 4010,
+  '#9ea181': 2149,
+  '#9fa99a': 3696,
 };
 const NETHER_HISTOGRAM = {
-  '#1e8078': 21226,
-  '#4a4546': 10470,
-  '#5b4636': 7312,
-  '#8a3030': 17052,
-  '#a71d2a': 24386,
-  '#e0661c': 10155,
+  '#533534': 21226,
+  '#582e2e': 10470,
+  '#5a2e2c': 7312,
+  '#602c2c': 17052,
+  '#63292b': 24386,
+  '#6a3229': 10155,
 };
 const END_HISTOGRAM = {
   '#0c0918': 85341,
   '#1b1128': 2,
+  '#231a30': 897,
+  '#312f31': 4268,
   '#3c3c3c': 1,
-  '#8c6a9c': 897,
-  '#dcdca2': 4360,
+  '#dcdca2': 92,
 };
 
 describe('TerrainLayer', () => {
@@ -161,7 +159,7 @@ function histogram(dim, radius, step) {
 }
 
 describe('biomes', () => {
-  test('Overworld : océans, plages, rivières, montagnes et 14 biomes terrestres', () => {
+  test('Overworld : océans, montagnes et 14 biomes terrestres, en teintes atténuées', () => {
     expect(histogram('overworld', 6000, 40)).toEqual(OVERWORLD_HISTOGRAM);
   });
 
@@ -346,5 +344,5 @@ describe('GridOverlay', () => {
 });
 
 test('couleurs de fond des conteneurs', () => {
-  expect(T.background).toEqual({ overworld: '#2f52b0', nether: '#8a3030', end: '#0c0918' });
+  expect(T.background).toEqual({ overworld: '#8e9985', nether: '#5a2b2b', end: '#0c0918' });
 });

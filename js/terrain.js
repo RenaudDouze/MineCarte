@@ -2,11 +2,12 @@
  * Fond de carte des trois dimensions et grille (blocs / chunks / régions),
  * sous forme de GridLayer Leaflet.
  *
- * Le fond ressemble à une carte Minecraft (océans, rivières, biomes, lave du
- * Nether, îles de l'End) mais il est inventé : il est généré à partir d'une
- * graine fixe et ne correspond à aucun monde. La carte l'indique en
- * permanence (« Fond fictif »). Seule l'île centrale de l'End, ses piliers et
- * le portail de sortie sont à leur vraie place.
+ * Le fond évoque une carte Minecraft (océans, biomes, lave du Nether, îles de
+ * l'End) mais il est inventé : il est généré à partir d'une graine fixe et ne
+ * correspond à aucun monde. Il reste volontairement discret : chaque biome n'est
+ * qu'une nuance de l'aplat de sa dimension. La carte indique en permanence
+ * « Fond fictif ». Seule l'île centrale de l'End, ses piliers et le portail de
+ * sortie sont à leur vraie place, avec leurs vraies couleurs.
  *
  * Convention de coordonnées (identique à Minecraft) :
  *   X croît vers l'est, Z croît vers le sud.
@@ -24,52 +25,62 @@
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   }
 
+  // Couleurs atténuées : chaque teinte est rapprochée de l'aplat de la
+  // dimension (amount = part de la teinte d'origine conservée).
+  /** @returns {Record<string, number[]>} */
+  function palette(base, colors, amount) {
+    const b = hex(base);
+    return Object.fromEntries(Object.entries(colors).map(([name, color]) => [
+      name,
+      hex(color).map((v, i) => Math.round(b[i] + (v - b[i]) * amount)),
+    ]));
+  }
+
   // Bruit fBm ramené à un entier de 0 à 999 : les seuils des biomes sont des
   // entiers, comparés exactement.
   function level(x, z, scale, salt, octaves) {
     return Math.floor(fbm(x / scale, z / scale, SEED + salt, octaves) * 1000);
   }
 
-  const OVERWORLD = {
-    deepOcean: hex('#1f3478'),
-    ocean: hex('#2f52b0'),
-    coldOcean: hex('#3d5aa8'),
-    river: hex('#3f6fd6'),
-    beach: hex('#e3d79b'),
-    snowyBeach: hex('#e8e6d8'),
-    plains: hex('#8db360'),
-    sunflower: hex('#a3c060'),
-    forest: hex('#3f8a36'),
-    birch: hex('#5c9c4a'),
-    darkForest: hex('#2f4d1e'),
-    swamp: hex('#4d6b45'),
-    taiga: hex('#3f6b57'),
-    snowyTaiga: hex('#9fb8ae'),
-    snowy: hex('#eef4f8'),
-    desert: hex('#e8c56d'),
-    badlands: hex('#c46a36'),
-    savanna: hex('#bdb25f'),
-    jungle: hex('#4f8a14'),
-    mountains: hex('#8a8a8a'),
-    peaks: hex('#dde6ee'),
-  };
+  const OVERWORLD = palette('#8e9985', {
+    deepOcean: '#1f3478',
+    ocean: '#2f52b0',
+    coldOcean: '#3d5aa8',
+    plains: '#8db360',
+    sunflower: '#a3c060',
+    forest: '#3f8a36',
+    birch: '#5c9c4a',
+    darkForest: '#2f4d1e',
+    swamp: '#4d6b45',
+    taiga: '#3f6b57',
+    snowyTaiga: '#9fb8ae',
+    snowy: '#eef4f8',
+    desert: '#e8c56d',
+    badlands: '#c46a36',
+    savanna: '#bdb25f',
+    jungle: '#4f8a14',
+    mountains: '#8a8a8a',
+    peaks: '#dde6ee',
+  }, 0.18);
 
-  const NETHER = {
-    wastes: hex('#8a3030'),
-    crimson: hex('#a71d2a'),
-    warped: hex('#1e8078'),
-    soul: hex('#5b4636'),
-    basalt: hex('#4a4546'),
-    lava: hex('#e0661c'),
-  };
+  const NETHER = palette('#5a2b2b', {
+    wastes: '#8a3030',
+    crimson: '#a71d2a',
+    warped: '#1e8078',
+    soul: '#5b4636',
+    basalt: '#4a4546',
+    lava: '#e0661c',
+  }, 0.12);
 
+  // Île centrale : vraies couleurs.
   const END = {
     void: hex('#0c0918'),
     stone: hex('#dcdca2'),
     obsidian: hex('#1b1128'),
     bedrock: hex('#3c3c3c'),
-    chorus: hex('#8c6a9c'),
   };
+  // Îles extérieures (inventées) : atténuées.
+  const OUTER_END = palette('#0c0918', { stone: '#dcdca2', chorus: '#8c6a9c' }, 0.18);
 
   // Élévation, température et humidité décident du biome.
   function overworld(x, z) {
@@ -79,10 +90,6 @@
 
     if (e < 360) return OVERWORLD.deepOcean;
     if (e < 440) return t < 360 ? OVERWORLD.coldOcean : OVERWORLD.ocean;
-    if (e < 452) return t < 360 ? OVERWORLD.snowyBeach : OVERWORLD.beach;
-
-    // Rivières : une fine bande autour de la ligne médiane d'un autre bruit.
-    if (e < 660 && Math.abs(level(x, z, 800, 37, 3) - 500) < 9) return OVERWORLD.river;
 
     if (e >= 730) return OVERWORLD.peaks;
     if (e >= 665) return t < 380 ? OVERWORLD.peaks : OVERWORLD.mountains;
@@ -135,7 +142,7 @@
     const radius = islandRadius(Math.atan2(z, x));
     if (d2 < radius * radius) return END.stone;
     if (Math.round(Math.sqrt(d2) / 64) > 16 && level(x, z, 140, 223, 4) >= 700) {
-      return level(x, z, 18, 227, 2) >= 660 ? END.chorus : END.stone;
+      return level(x, z, 18, 227, 2) >= 660 ? OUTER_END.chorus : OUTER_END.stone;
     }
     return END.void;
   }
@@ -176,8 +183,8 @@
         for (let i = 0; i < n; i++) {
           const x = Math.floor(x0 + i * step);
           const c = generate(x, z);
-          // Légère variation de teinte par carré de 4 blocs, pour le relief.
-          const shade = 0.93 + 0.1 * hash2(x >> 2, z >> 2, SEED + 7);
+          // Texture discrète : légère variation de teinte par carré de 4 blocs.
+          const shade = 0.97 + 0.05 * hash2(x >> 2, z >> 2, SEED + 7);
           data.set([c[0] * shade, c[1] * shade, c[2] * shade, 255], (j * n + i) * 4);
         }
       }
@@ -260,6 +267,6 @@
     GridOverlay,
     generators: GENERATORS,
     // Couleur du conteneur pendant le chargement des tuiles.
-    background: { overworld: '#2f52b0', nether: '#8a3030', end: '#0c0918' },
+    background: { overworld: '#8e9985', nether: '#5a2b2b', end: '#0c0918' },
   };
 })(window);

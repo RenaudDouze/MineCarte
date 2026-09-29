@@ -18,11 +18,11 @@ python3 -m http.server 8000
 
 - **Trois dimensions** : Overworld, Nether et End, avec un onglet chacune. Chaque dimension
   garde sa propre vue (position et zoom).
-- **Fond fictif** : chaque dimension a un fond qui ressemble à une carte Minecraft (océans,
-  plages, rivières, forêts, déserts, montagnes… ; lave et forêts du Nether ; îles de l'End), mais
-  il est inventé à partir d'une graine fixe et ne correspond pas à ton monde. La mention « Fond
-  fictif — pas le terrain réel » reste affichée sur la carte. Seuls l'île centrale de l'End, ses
-  piliers et le portail de sortie sont à leur vraie place.
+- **Fond fictif** : chaque dimension a un fond discret qui évoque une carte Minecraft (océans,
+  forêts, déserts, montagnes… ; lave et forêts du Nether ; îles de l'End) en simples nuances de
+  son aplat de couleur. Il est inventé à partir d'une graine fixe et ne correspond pas à ton
+  monde ; la mention « Fond fictif — pas le terrain réel » reste affichée sur la carte. Seuls
+  l'île centrale de l'End, ses piliers et le portail de sortie sont à leur vraie place.
 - **Grille** : blocs, chunks (16) et régions (512), axes X = 0 et Z = 0. Les coordonnées sous la
   souris s'affichent en bas à gauche (chunk, région, équivalent Nether ⇄ Overworld).
 - **POI** : ajout (bouton « + POI » ou clic droit sur la carte), modification et suppression.
