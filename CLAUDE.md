@@ -43,9 +43,8 @@ Un fichier : `npx vitest run tests/store.test.js`, `npx playwright test e2e/poi.
 - `tests/helpers/app.js` démarre l'application complète dans jsdom (`boot()`), avec faux
   canvas, faux `<dialog>`, IndexedDB (`fake-indexeddb`) et URL objet simulées. Les fausses
   minuteries s'installent **après** `boot()`.
-- Fond fictif (`terrain.js`) : bruit ramené à des entiers (0-999) pour que chaque seuil de biome
-  soit atteignable exactement ; les tests comparent des histogrammes de référence
-  (`tests/terrain.test.js`), à régénérer volontairement si l'aspect du fond change.
+- Île centrale de l'End (`terrain.js`) : distances comparées au carré, en entiers, pour que le
+  bord soit exact (les tests visent des blocs pile sur le rayon).
 - jsdom n'a qu'un `localStorage` : vider avant de simuler un autre appareil.
 - `tests/helpers/server.js` : vrai worker sur KV en mémoire, utilisé par les tests unitaires
   et les tests e2e (via `page.route`).
