@@ -246,7 +246,7 @@ describe('POI sur la carte', () => {
     expect(linkBtns[1].querySelector('.badge').textContent).toBe('Nether');
     expect(linkBtns[1].querySelector('.badge').className).toBe('badge badge-nether');
     expect(linkBtns[1].querySelector('.arrow').textContent).toBe('➜');
-    expect(button('Portail Nether', p).title).toBe('Créer un POI lié dans le Nether aux coordonnées converties');
+    expect(button('Portail Nether', p).title).toBe('Créer un lieu lié dans le Nether aux coordonnées converties');
     const leafletPopup = app.map._popup;
     expect(leafletPopup.options).toMatchObject({ offset: [0, -4], minWidth: 220, maxWidth: 320 });
     expect(leafletPopup.getLatLng()).toEqual(ll(10, 20));
@@ -318,14 +318,14 @@ describe('POI sur la carte', () => {
     app.state.markers.get('a').fire('click');
     button('Modifier', popup()).click();
     expect($('#poi-dialog').open).toBe(true);
-    expect($('#poi-dialog-title').textContent).toBe('Modifier le POI');
+    expect($('#poi-dialog-title').textContent).toBe('Modifier le lieu');
     expect($('#poi-form').elements.label.value).toBe('Base');
     $('#poi-dialog').close();
 
     app.state.markers.get('a').fire('click');
     button('Portail Nether', popup()).click();
     const f = $('#poi-form').elements;
-    expect($('#poi-dialog-title').textContent).toBe('Nouveau POI');
+    expect($('#poi-dialog-title').textContent).toBe('Nouveau lieu');
     expect([f.label.value, f.dim.value, f.x.value, f.y.value, f.z.value, f.icon.value])
       .toEqual(['Base (Nether)', 'nether', '10', '12', '-2', 'minecraft:diamond']);
     expect($('#poi-links input:checked').value).toBe('a');
@@ -338,7 +338,7 @@ describe('POI sur la carte', () => {
 
     vi.stubGlobal('confirm', vi.fn(() => false));
     button('Supprimer', popup()).click();
-    expect(confirm).toHaveBeenCalledWith('Supprimer le POI « Base » ?');
+    expect(confirm).toHaveBeenCalledWith('Supprimer le lieu « Base » ?');
     expect(app.store.data.pois).toHaveLength(1);
     confirm.mockReturnValue(true);
     button('Supprimer', popup()).click();
@@ -350,7 +350,7 @@ describe('POI sur la carte', () => {
     const app = await withData({ pois: [POI({ id: 'n', name: 'N', dim: 'nether', x: 3, z: -1 })] }, { hash: '#nether/0/0/0' });
     app.state.markers.get('n').fire('click');
     const b = button('Portail Overworld', popup());
-    expect(b.title).toBe("Créer un POI lié dans l'Overworld aux coordonnées converties");
+    expect(b.title).toBe("Créer un lieu lié dans l'Overworld aux coordonnées converties");
     b.click();
     expect($('#poi-form').elements.x.value).toBe('24');
     expect($('#poi-form').elements.z.value).toBe('-8');
@@ -427,7 +427,7 @@ describe('listes du panneau', () => {
     expect(text('#poi-list')).toBe('Aucun résultat.');
     input($('#poi-search'), '');
     app.store.replaceAll({});
-    expect(text('#poi-list')).toBe('Aucun POI. Clic droit sur la carte ou « + POI ».');
+    expect(text('#poi-list')).toBe('Aucun lieu. Clic droit sur la carte ou « + Lieu ».');
     expect($('#poi-list li').className).toBe('empty');
   });
 
@@ -458,7 +458,7 @@ describe('dialogue POI', () => {
     app.map.setView(ll(40, -8), 1, { animate: false });
     $('#add-poi').click();
     const f = $('#poi-form').elements;
-    expect($('#poi-dialog-title').textContent).toBe('Nouveau POI');
+    expect($('#poi-dialog-title').textContent).toBe('Nouveau lieu');
     expect([f.id.value, f.label.value, f.color.value, f.dim.value, f.x.value, f.y.value, f.z.value, f.icon.value])
       .toEqual(['', '', '#e53935', 'overworld', '40', '64', '-8', '']);
     expect($('#icon-picker').hidden).toBe(true);
@@ -508,7 +508,7 @@ describe('dialogue POI', () => {
   test('aucun autre POI', async () => {
     await boot();
     $('#add-poi').click();
-    expect(text('#poi-links')).toBe('Aucun autre POI pour le moment.');
+    expect(text('#poi-links')).toBe('Aucun autre lieu pour le moment.');
   });
 
   test('fermeture par le bouton', async () => {
@@ -697,7 +697,7 @@ describe('tracé d’un chemin', () => {
     expect(app.map.getContainer().classList.contains('drawing')).toBe(true);
     expect($('#mode-banner').hidden).toBe(false);
     expect($('#mode-undo').hidden).toBe(false);
-    expect(text('#mode-text')).toBe('Tracé — 0 point(s), 0 blocs. Clic : ajouter · clic sur un POI : s’y accrocher · double-clic / Entrée : terminer');
+    expect(text('#mode-text')).toBe('Tracé — 0 point(s), 0 blocs. Clic : ajouter · clic sur un lieu : s’y accrocher · double-clic / Entrée : terminer');
     // Pas d'aperçu sans point.
     app.map.fire('mousemove', { latlng: ll(5, 5) });
     expect(app.state.draw.preview.getLatLngs()).toEqual([]);
@@ -898,7 +898,7 @@ describe('menu contextuel', () => {
     expect(menu.hidden).toBe(false);
     expect(text('.menu-title')).toBe('X 12 · Z -7');
     expect([menu.style.left, menu.style.top]).toEqual(['100px', '50px']);
-    button('Ajouter un POI', menu).click();
+    button('Ajouter un lieu', menu).click();
     expect(menu.hidden).toBe(true);
     expect($('#poi-form').elements.x.value).toBe('12');
     expect($('#poi-form').elements.z.value).toBe('-7');
@@ -1022,7 +1022,7 @@ describe('recherche de coordonnées', () => {
     vi.stubGlobal('prompt', vi.fn());
     button('Copier', popup()).click();
     expect(prompt).toHaveBeenCalledWith('Copier :', '80 70 -16');
-    const b = button('Créer un POI', popup());
+    const b = button('Créer un lieu', popup());
     expect(b.className).toBe('primary');
     b.click();
     expect(popup()).toBeNull();
@@ -1040,7 +1040,7 @@ describe('recherche de coordonnées', () => {
     vi.stubGlobal('prompt', vi.fn());
     button('Copier', popup()).click();
     expect(prompt).toHaveBeenCalledWith('Copier :', '3 ~ 4');
-    button('Créer un POI', popup()).click();
+    button('Créer un lieu', popup()).click();
     expect($('#poi-form').elements.y.value).toBe('64');
   });
 
@@ -1140,7 +1140,7 @@ describe('export, import, effacement', () => {
     await flush();
     expect(app.state.mode).toBe(null);
     expect(app.store.data.pois.map((p) => p.id)).toEqual(['x', 'y']);
-    expect(text('#toast')).toBe('2 POI et 1 chemins importés.');
+    expect(text('#toast')).toBe('2 lieu(x) et 1 chemin(s) importés.');
     expect($('#import-file').value).toBe('');
     setFiles($('#import-file'), [file('{oups')]);
     await flush();
@@ -1154,7 +1154,7 @@ describe('export, import, effacement', () => {
     const app = await withData({ seed: 'graine', pois: [POI({ id: 'a' })] });
     vi.stubGlobal('confirm', vi.fn(() => false));
     $('#reset').click();
-    expect(confirm).toHaveBeenCalledWith('Effacer tous les POI et chemins ? Cette action est irréversible (pensez à exporter).');
+    expect(confirm).toHaveBeenCalledWith('Effacer tous les lieux et chemins ? Cette action est irréversible (pensez à exporter).');
     expect(app.store.data.pois).toHaveLength(1);
     confirm.mockReturnValue(true);
     $('#new-path').click();

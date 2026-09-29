@@ -19,7 +19,7 @@
     </nav>
     <form id="goto" class="goto" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
       <label>X <input name="x" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
-      <label>Y <input name="y" type="number" step="1" placeholder="opt." title="Optionnel : repris dans le POI créé" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
+      <label>Y <input name="y" type="number" step="1" placeholder="opt." title="Optionnel : repris dans le lieu créé" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       <label>Z <input name="z" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       <button type="submit">Aller</button>
     </form>
@@ -28,7 +28,7 @@
   <div class="layout">
     <aside id="sidebar">
       <div class="tabs" role="tablist">
-        <button type="button" class="tab active" data-tab="pois">POI</button>
+        <button type="button" class="tab active" data-tab="pois">Lieux</button>
         <button type="button" class="tab" data-tab="paths">Chemins</button>
         <button type="button" class="tab" data-tab="settings">Réglages</button>
       </div>
@@ -36,7 +36,7 @@
       <section class="panel active" data-panel="pois">
         <div class="row">
           <input id="poi-search" type="search" placeholder="Rechercher…" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
-          <button type="button" id="add-poi" class="primary">+ POI</button>
+          <button type="button" id="add-poi" class="primary">+ Lieu</button>
         </div>
         <label class="check"><input type="checkbox" id="poi-all-dims"> Toutes les dimensions</label>
         <ul id="poi-list" class="list"></ul>
@@ -52,13 +52,13 @@
       <section class="panel" data-panel="settings">
         <h3>Affichage</h3>
         <label class="check"><input type="checkbox" id="opt-grid" checked> Grille (chunks / régions)</label>
-        <label class="check"><input type="checkbox" id="opt-labels" checked> Noms des POI</label>
-        <label class="check"><input type="checkbox" id="opt-links" checked> Traits entre POI liés</label>
+        <label class="check"><input type="checkbox" id="opt-labels" checked> Noms des lieux</label>
+        <label class="check"><input type="checkbox" id="opt-links" checked> Traits entre lieux liés</label>
 
         <section id="sync-section" hidden>
           <h3>Synchronisation cloud</h3>
           <div id="sync-off">
-            <p class="hint">Sauvegarde tes POI et chemins dans le cloud et retrouve-les sur tes autres appareils grâce à un code.</p>
+            <p class="hint">Sauvegarde tes lieux et chemins dans le cloud et retrouve-les sur tes autres appareils grâce à un code.</p>
             <div class="row"><button type="button" id="sync-create" class="primary grow">Créer un code</button></div>
             <form id="sync-join" class="row" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
               <input name="code" type="text" placeholder="Code existant (ex. ABCD-EFGH)" maxlength="12" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
@@ -90,10 +90,10 @@
 
         <h3>Aide</h3>
         <ul class="help">
-          <li><b>Clic droit</b> sur la carte : ajouter un POI, démarrer un chemin, copier les coordonnées.</li>
-          <li><b>Clic</b> sur un POI : détails, liens et actions.</li>
-          <li><b>Aller à</b> (X, Y optionnel, Z) : depuis l'emplacement trouvé, créer un POI, commencer un chemin, ajouter le point au bout d'un chemin ou au tracé en cours.</li>
-          <li>Tracé : clic pour ajouter un point, clic sur un POI pour s'y accrocher, <b>double-clic</b> ou <b>Entrée</b> pour terminer, <b>Retour arrière</b> pour annuler le dernier point, <b>Échap</b> pour abandonner.</li>
+          <li><b>Clic droit</b> sur la carte : ajouter un lieu, démarrer un chemin, copier les coordonnées.</li>
+          <li><b>Clic</b> sur un lieu : détails, liens et actions.</li>
+          <li><b>Aller à</b> (X, Y optionnel, Z) : depuis l'emplacement trouvé, créer un lieu, commencer un chemin, ajouter le point au bout d'un chemin ou au tracé en cours.</li>
+          <li>Tracé : clic pour ajouter un point, clic sur un lieu pour s'y accrocher, <b>double-clic</b> ou <b>Entrée</b> pour terminer, <b>Retour arrière</b> pour annuler le dernier point, <b>Échap</b> pour abandonner.</li>
           <li>Édition d'un tracé : glissez les sommets, clic sur un segment pour insérer un point, clic droit sur un sommet pour le supprimer.</li>
         </ul>
       </section>
@@ -117,7 +117,7 @@
 
   <dialog id="poi-dialog">
     <form id="poi-form" method="dialog" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
-      <h2 id="poi-dialog-title">Nouveau POI</h2>
+      <h2 id="poi-dialog-title">Nouveau lieu</h2>
       <input type="hidden" name="id">
       <label>Nom <input name="label" type="text" maxlength="100" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       <div class="field">
@@ -153,7 +153,7 @@
         <label>Z <input name="z" type="number" step="1" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       </div>
       <div class="field">
-        <span>Liens vers d'autres POI</span>
+        <span>Liens vers d'autres lieux</span>
         <input id="poi-link-filter" type="search" placeholder="Filtrer…" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
         <div id="poi-links" class="link-picker"></div>
       </div>

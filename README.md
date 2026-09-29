@@ -23,33 +23,33 @@ python3 -m http.server 8000
   pour l'End), qui ne peut pas être confondu avec une vraie carte.
 - **Grille** : blocs, chunks (16) et régions (512), axes X = 0 et Z = 0. Les coordonnées sous la
   souris s'affichent en bas à gauche (chunk, région, équivalent Nether ⇄ Overworld).
-- **POI** : ajout (bouton « + POI » ou clic droit sur la carte), modification et suppression.
-  Chaque POI a un nom, une couleur, une dimension et des coordonnées X, Y, Z. Seuls X et Z
+- **Lieux** : ajout (bouton « + Lieu » ou clic droit sur la carte), modification et suppression.
+  Chaque lieu a un nom, une couleur, une dimension et des coordonnées X, Y, Z. Seuls X et Z
   servent au placement, Y est affiché pour information.
-- **Icônes d'items** : un POI peut afficher l'icône d'un item Minecraft (recherche en anglais
+- **Icônes d'items** : un lieu peut afficher l'icône d'un item Minecraft (recherche en anglais
   parmi ~1 650 items). Les textures, propriété de Mojang, ne sont pas incluses dans le dépôt :
   elles sont chargées depuis le paquet npm [`minecraft-textures`](https://github.com/destruc7i0n/minecraft-textures)
   via jsDelivr (connexion internet requise).
-- **Liens entre POI** : un POI peut être lié à un ou plusieurs autres POI, y compris dans une
-  autre dimension. Dans la popup d'un POI, cliquer sur un lien centre la carte sur le POI lié
-  (et change de dimension si besoin). Les POI liés d'une même dimension sont reliés par un
-  trait pointillé. Le bouton « Portail Nether / Overworld » crée un POI lié dans l'autre
+- **Liens entre lieux** : un lieu peut être lié à un ou plusieurs autres lieux, y compris dans une
+  autre dimension. Dans la popup d'un lieu, cliquer sur un lien centre la carte sur le lieu lié
+  (et change de dimension si besoin). Les lieux liés d'une même dimension sont reliés par un
+  trait pointillé. Le bouton « Portail Nether / Overworld » crée un lieu lié dans l'autre
   dimension aux coordonnées converties (÷8 ou ×8).
 - **Chemins** : tracé de polylignes avec un nom, une couleur et une épaisseur (1 à 16 px), et
   affichage de leur longueur en blocs.
-  - Tracé : clic pour ajouter un point, clic sur un POI pour s'y accrocher, double-clic ou
+  - Tracé : clic pour ajouter un point, clic sur un lieu pour s'y accrocher, double-clic ou
     `Entrée` pour terminer, `Retour arrière` pour annuler le dernier point, `Échap` pour abandonner.
   - Édition : glisser un sommet pour le déplacer, clic sur un segment pour insérer un point,
     clic droit sur un sommet pour le supprimer. « Prolonger » ajoute des points à la fin.
-- **Aller à** des coordonnées X / Z (Y optionnel) : depuis l'emplacement trouvé, créer un POI
+- **Aller à** des coordonnées X / Z (Y optionnel) : depuis l'emplacement trouvé, créer un lieu
   (coordonnées pré-remplies), commencer un chemin, ajouter le point au bout d'un chemin existant
   ou au tracé en cours.
 - **URL partageable** (`#dimension/x/z/zoom`).
 - **Sauvegarde** automatique dans le navigateur (localStorage), **export et import JSON**.
 - **Synchronisation cloud par code** (Réglages) : « Créer un code » sur un appareil, puis
   « Rejoindre » avec ce code sur les autres. Les modifications sont synchronisées
-  automatiquement ; en cas de modifications simultanées, les données sont fusionnées POI par
-  POI et chemin par chemin. Nécessite un petit worker Cloudflare : voir `worker/README.md`.
+  automatiquement ; en cas de modifications simultanées, les données sont fusionnées lieu par
+  lieu et chemin par chemin. Nécessite un petit worker Cloudflare : voir `worker/README.md`.
 
 ## Structure
 
@@ -63,7 +63,7 @@ python3 -m http.server 8000
 | `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
 | `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |
 | `worker/` | Worker Cloudflare de synchronisation |
-| `js/store.js` | Modèle de données (POI, liens, chemins), persistance, import / export |
+| `js/store.js` | Modèle de données (lieux, liens, chemins), persistance, import / export |
 | `js/utils.js` | Fonctions partagées (coordonnées, conversions, longueurs, DOM) |
 | `js/app.js` | Carte, rendu, interactions |
 

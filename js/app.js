@@ -216,7 +216,7 @@
       allDims && poi.dim !== state.dim ? dimBadge(poi.dim) : null,
       poi.links.length ? h('span', { class: 'item-links', title: 'Liens' }, `🔗 ${poi.links.length}`) : null)));
     if (!pois.length) {
-      poiList.append(h('li', { class: 'empty' }, query ? 'Aucun résultat.' : 'Aucun POI. Clic droit sur la carte ou « + POI ».'));
+      poiList.append(h('li', { class: 'empty' }, query ? 'Aucun résultat.' : 'Aucun lieu. Clic droit sur la carte ou « + Lieu ».'));
     }
 
     const paths = store.data.paths.filter((p) => p.dim === state.dim);
@@ -259,7 +259,7 @@
         h('button', { type: 'button', onclick: () => openPoiDialog(poi) }, 'Modifier'),
         conv ? h('button', {
           type: 'button',
-          title: `Créer un POI lié dans ${conv.dim === 'nether' ? 'le Nether' : "l'Overworld"} aux coordonnées converties`,
+          title: `Créer un lieu lié dans ${conv.dim === 'nether' ? 'le Nether' : "l'Overworld"} aux coordonnées converties`,
           onclick: () => openPoiDialog({
             name: `${poi.name} (${DIM_LABELS[conv.dim]})`,
             color: poi.color,
@@ -276,7 +276,7 @@
           type: 'button',
           class: 'danger',
           onclick: () => {
-            if (confirm(`Supprimer le POI « ${poi.name} » ?`)) {
+            if (confirm(`Supprimer le lieu « ${poi.name} » ?`)) {
               map.closePopup();
               store.deletePoi(poi.id);
             }
@@ -354,7 +354,7 @@
         h('span', { class: 'link-name' }, p.name),
         h('span', { class: 'item-sub' }, `${p.x}, ${p.z}`),
         dimBadge(p.dim))));
-    if (!others.length) box.append(h('p', { class: 'hint' }, 'Aucun autre POI pour le moment.'));
+    if (!others.length) box.append(h('p', { class: 'hint' }, 'Aucun autre lieu pour le moment.'));
   }
 
   let poiDialogLinks = new Set();
@@ -362,7 +362,7 @@
     const form = $('#poi-form');
     const center = fromLatLng(map.getCenter());
     const data = Object.assign({ name: '', color: '#e53935', icon: '', dim: state.dim, x: center.x, y: 64, z: center.z, links: [] }, poi);
-    $('#poi-dialog-title').textContent = data.id ? 'Modifier le POI' : 'Nouveau POI';
+    $('#poi-dialog-title').textContent = data.id ? 'Modifier le lieu' : 'Nouveau lieu';
     form.elements.id.value = data.id || '';
     form.elements.label.value = data.name;
     form.elements.color.value = data.color;
@@ -570,7 +570,7 @@
       pane: 'pathPane', radius: 4, color: '#fff', weight: 2, fillColor: d.color, fillOpacity: 1, interactive: false,
     }).addTo(d.vertices));
     showBanner(`Tracé${d.pathId ? ' (prolongement)' : ''} — ${d.points.length} point(s), ${fmt(pathLength(d.points))} blocs. ` +
-      'Clic : ajouter · clic sur un POI : s’y accrocher · double-clic / Entrée : terminer', true);
+      'Clic : ajouter · clic sur un lieu : s’y accrocher · double-clic / Entrée : terminer', true);
   }
 
   function finishDrawing() {
@@ -739,7 +739,7 @@
     const item = (label, fn) => h('button', { type: 'button', onclick: () => { hideContextMenu(); fn(); } }, label);
     menu.replaceChildren(
       h('div', { class: 'menu-title' }, `X ${x} · Z ${z}`),
-      item('📍 Ajouter un POI ici', () => openPoiDialog({ x, z })),
+      item('📍 Ajouter un lieu ici', () => openPoiDialog({ x, z })),
       item('〰 Commencer un chemin ici', () => startDrawing({ start: { x, z } })),
       item('📋 Copier les coordonnées', () => copy(`${x} ~ ${z}`)),
       item('🎯 Centrer ici', () => map.panTo(e.latlng)));
@@ -832,7 +832,7 @@
       }, 'primary')];
     } else if (!state.mode) {
       actions = [
-        btn('📍 Créer un POI', () => {
+        btn('📍 Créer un lieu', () => {
           map.closePopup();
           openPoiDialog(y === null ? { x, z } : { x, y, z });
         }, 'primary'),
@@ -932,7 +932,7 @@
       cancelMode();
       map.closePopup();
       store.replaceAll(raw);
-      toast(`${store.data.pois.length} POI et ${store.data.paths.length} chemins importés.`);
+      toast(`${store.data.pois.length} lieu(x) et ${store.data.paths.length} chemin(s) importés.`);
     } catch (err) {
       alert(`Fichier invalide : ${err.message}`);
     }
@@ -940,7 +940,7 @@
 
   $('#reset').addEventListener('click', () => {
     const cloudNote = cloud.code ? ' Les données seront aussi effacées du cloud et des appareils reliés.' : '';
-    if (!confirm(`Effacer tous les POI et chemins ? Cette action est irréversible (pensez à exporter).${cloudNote}`)) return;
+    if (!confirm(`Effacer tous les lieux et chemins ? Cette action est irréversible (pensez à exporter).${cloudNote}`)) return;
     cancelMode();
     map.closePopup();
     store.replaceAll({ seed: store.data.seed });

@@ -54,7 +54,7 @@ describe('chargement', () => {
 describe('nettoyage des POI', () => {
   test('valeurs par défaut et conversions', () => {
     const [p] = load({ pois: [{ id: 'a' }] }).pois;
-    expect(p).toEqual({ id: 'a', name: 'POI', color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '', links: [] });
+    expect(p).toEqual({ id: 'a', name: 'Lieu', color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '', links: [] });
   });
 
   test('champs valides conservés, nombres arrondis, couleur en minuscules', () => {
@@ -64,7 +64,7 @@ describe('nettoyage des POI', () => {
 
   test('valeurs invalides remplacées', () => {
     const [p] = load({ pois: [{ id: 'a', name: '', color: 'red', dim: 'mars', x: 'abc', y: 'Infinity', z: null, icon: 'Minecraft:X' }] }).pois;
-    expect(p).toMatchObject({ name: 'POI', color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '' });
+    expect(p).toMatchObject({ name: 'Lieu', color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '' });
     expect(load({ pois: [{ id: 'a', color: '#abcdefff', icon: 'minecraft:ab cd' }] }).pois[0]).toMatchObject({ color: '#e53935', icon: '' });
     expect(load({ pois: [{ id: 'a', color: 'x#abcdef', icon: 'xminecraft:ab' }] }).pois[0]).toMatchObject({ color: '#e53935', icon: '' });
     expect(load({ pois: [{ id: 'a', icon: 42 }] }).pois[0].icon).toBe('');
@@ -183,11 +183,11 @@ describe('Store', () => {
     expect(a.id).toMatch(/^[0-9a-z]{9,}$/);
     expect(store.getPoi(a.id)).toBe(a);
     const b = store.savePoi({ name: '   ', links: [a.id, 'inconnu'] });
-    expect(b.name).toBe('POI');
+    expect(b.name).toBe('Lieu');
     expect(b).toMatchObject({ color: '#e53935', dim: 'overworld', x: 0, y: 64, z: 0, icon: '' });
     expect(b.links).toEqual([a.id]);
     expect(a.links).toEqual([b.id]);
-    expect(store.savePoi({}).name).toBe('POI');
+    expect(store.savePoi({}).name).toBe('Lieu');
     expect(store.savePoi({ name: 0 }).name).toBe('0');
     expect(store.savePoi({ name: 'X', links: 'pas un tableau' }).links).toEqual([]);
     expect(store.savePoi({ name: 'y'.repeat(120) }).name).toHaveLength(100);

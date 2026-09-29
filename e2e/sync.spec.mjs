@@ -5,7 +5,7 @@ test('synchronisation par code entre deux appareils', async ({ page, otherPage }
   await enableSync(otherPage);
 
   await page.goto('/');
-  await page.getByRole('button', { name: '+ POI' }).click();
+  await page.getByRole('button', { name: '+ Lieu' }).click();
   await page.locator('#poi-form [name="label"]').fill('Village');
   await page.locator('#poi-form button[type="submit"]').click();
   await page.locator('.tab[data-tab="settings"]').click();
@@ -23,7 +23,7 @@ test('synchronisation par code entre deux appareils', async ({ page, otherPage }
 
   // Modification sur le second appareil, reçue par le premier.
   await otherPage.locator('.tab[data-tab="pois"]').click();
-  await otherPage.getByRole('button', { name: '+ POI' }).click();
+  await otherPage.getByRole('button', { name: '+ Lieu' }).click();
   await otherPage.locator('#poi-form [name="label"]').fill('Ferme');
   await otherPage.locator('#poi-form button[type="submit"]').click();
   await expect(otherPage.locator('#sync-status')).toHaveText(/Synchronisé/);
