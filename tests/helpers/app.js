@@ -13,7 +13,7 @@ const html = readFileSync(join(import.meta.dirname, '../../index.html'), 'utf8')
 const page = new DOMParser().parseFromString(html, 'text/html');
 page.querySelectorAll('script').forEach((el) => el.remove());
 const body = page.body.innerHTML;
-const MODULES = ['utils', 'noise', 'terrain', 'config', 'icons', 'store', 'sync', 'undo'];
+const MODULES = ['utils', 'noise', 'terrain', 'config', 'icons', 'store', 'sync', 'undo', 'backups'];
 
 let cleanups = [];
 
@@ -46,6 +46,7 @@ export function teardown() {
  * @param {object} [o]
  * @param {string} [o.syncUrl] URL du worker (synchronisation active).
  * @param {object} [o.storage] Contenu initial du localStorage.
+ * @param {string} [o.search] Paramètres initiaux de l'URL (?…).
  * @param {string} [o.hash] Ancre initiale de l'URL.
  * @param {number} [o.width] Largeur de la fenêtre.
  * @param {IDBFactory|object} [o.idb] Fabrique IndexedDB.
@@ -57,7 +58,7 @@ export async function boot(o = {}) {
   vi.resetModules();
   localStorage.clear();
   for (const [k, v] of Object.entries(o.storage || {})) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
-  history.replaceState(null, '', `/${o.hash || ''}`);
+  history.replaceState(null, '', `/${o.search || ''}${o.hash || ''}`);
   window.innerWidth = o.width || 1280;
   document.body.className = '';
   delete document.body.dataset.dim;

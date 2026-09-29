@@ -499,6 +499,111 @@ describe('réception', () => {
   });
 });
 
+describe('lien de lecture seule', () => {
+  test('créer (ou retrouver) puis révoquer le lien du code', async () => {
+    const code = await sync.create();
+    const view = await sync.share();
+    expect(view).toMatch(/^[ABCDEFGHJKMNPQRSTWXYZ23456789]{8}$/);
+    expect(server.requests.at(-1)).toMatchObject({ method: 'POST', url: `${URL_}/api/sync/${code}/share` });
+    expect(await sync.share()).toBe(view);
+    expect(await sync.unshare()).toBeNull();
+    expect(server.requests.at(-1)).toMatchObject({ method: 'DELETE', url: `${URL_}/api/sync/${code}/share` });
+    expect(server.env.SYNC_KV.map.has(`view:${view}`)).toBe(false);
+  });
+
+  test('erreurs : code expiré, serveur injoignable', async () => {
+    await sync.create();
+    server.env.SYNC_KV.map.clear();
+    await expect(sync.share()).rejects.toThrow(new Error('Lien de lecture indisponible (hors ligne ?).'));
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    await expect(sync.unshare()).rejects.toThrow(new Error('Lien de lecture indisponible (hors ligne ?).'));
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 502 })));
+    await expect(sync.share()).rejects.toThrow(new Error('Lien de lecture indisponible (hors ligne ?).'));
+  });
+
+  describe('carte partagée', () => {
+    let visibility;
+    beforeEach(() => {
+      visibility = 'visible';
+      vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+    });
+
+    async function shared(data) {
+      await sync.create();
+      store.replaceAll(data);
+      await sync.pushNow();
+      return sync.share();
+    }
+
+    function viewer(view, url = `${URL_}//`) {
+      const s = new Store({ persist: false });
+      const st = [];
+      const changes = [];
+      s.onChange((d, source) => changes.push(source));
+      return { store: s, statuses: st, changes, view: new CloudSync.View(s, url, view, (x) => st.push(x)) };
+    }
+
+    test('lecture des données, sans écriture ni requête d’écriture', async () => {
+      const view = await shared({ seed: 'g', pois: [{ id: 'a', name: 'A', x: 1, z: 2 }] });
+      const v = viewer(view.toLowerCase());
+      const before = server.requests.length;
+      await v.view.pull();
+      expect(server.requests.slice(before).map((r) => [r.method, r.url])).toEqual([['GET', `${URL_}/api/view/${view.toLowerCase()}`]]);
+      expect(v.store.data.seed).toBe('g');
+      expect(v.store.data.pois.map((p) => p.name)).toEqual(['A']);
+      expect(v.changes).toEqual(['remote']);
+      expect(v.statuses).toEqual([{ kind: 'idle', at: expect.any(Date) }]);
+      // Données inchangées : pas de nouvelle écriture dans le store.
+      await v.view.pull();
+      expect(v.changes).toEqual(['remote']);
+      expect(v.statuses).toHaveLength(2);
+    });
+
+    test('code encore vide côté serveur : carte vide', async () => {
+      await sync.create();
+      server.env.SYNC_KV.map.set(`sync:${sync.code}`, JSON.stringify({ version: 0, data: null }));
+      const v = viewer(await sync.share());
+      await v.view.pull();
+      expect(v.changes).toEqual([]);
+      expect(v.statuses).toEqual([{ kind: 'idle', at: expect.any(Date) }]);
+    });
+
+    test('erreurs : non configuré, lien révoqué, hors ligne', async () => {
+      const view = await shared({ pois: [{ id: 'a', name: 'A', x: 1, z: 2 }] });
+      let v = viewer(view, '');
+      await v.view.pull();
+      expect(v.statuses).toEqual([{ kind: 'error', message: 'Partage indisponible : synchronisation non configurée.' }]);
+      await sync.unshare();
+      v = viewer(view);
+      await v.view.pull();
+      expect(v.statuses).toEqual([{ kind: 'error', message: 'Lien inconnu ou révoqué.' }]);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+      await v.view.pull();
+      expect(v.statuses.at(-1)).toEqual({ kind: 'error', message: 'Connexion impossible. Nouvel essai automatique.' });
+      expect(v.changes).toEqual([]);
+    });
+
+    test('démarrage : lecture immédiate, puis toutes les 30 s quand l’onglet est visible', async () => {
+      vi.useFakeTimers({ toFake: ['setInterval'] });
+      const v = viewer('ABCDEFGH');
+      const pull = vi.spyOn(v.view, 'pull').mockResolvedValue();
+      await v.view.start();
+      expect(pull).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(29999);
+      expect(pull).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1);
+      expect(pull).toHaveBeenCalledTimes(2);
+      visibility = 'hidden';
+      vi.advanceTimersByTime(30000);
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(pull).toHaveBeenCalledTimes(2);
+      visibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(pull).toHaveBeenCalledTimes(3);
+    });
+  });
+});
+
 describe('démarrage : vérification périodique et au retour sur l’onglet', () => {
   let visibility;
   beforeEach(() => {

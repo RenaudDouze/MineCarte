@@ -239,6 +239,27 @@
       this.fail(new Error('Trop de conflits'));
     }
 
+    // Lien de lecture seule du code : créé au besoin, sinon l'existant (share),
+    // ou révoqué (unshare). Renvoie l'identifiant du lien (null si révoqué).
+    share() {
+      return this.shareRequest('POST');
+    }
+
+    unshare() {
+      return this.shareRequest('DELETE');
+    }
+
+    async shareRequest(method) {
+      let res = {};
+      try {
+        res = await this.request(method, `/${this.state.code}/share`);
+      } catch {
+        /* hors ligne */
+      }
+      if (!res.json || !('view' in res.json)) throw new Error('Lien de lecture indisponible (hors ligne ?).');
+      return res.json.view;
+    }
+
     pull() {
       return this.enqueue(async () => {
         if (!this.state) return;
@@ -260,7 +281,45 @@
     }
   }
 
+  // Carte partagée en lecture seule (?vue=…) : relit régulièrement les données
+  // du lien, n'écrit jamais rien.
+  class CloudView {
+    constructor(store, url, view, onStatus) {
+      this.store = store;
+      this.url = String(url || '').replace(/\/+$/, '');
+      this.view = view;
+      this.onStatus = onStatus;
+    }
+
+    start() {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.pull();
+      });
+      setInterval(() => {
+        if (document.visibilityState === 'visible') this.pull();
+      }, POLL_MS);
+      return this.pull();
+    }
+
+    async pull() {
+      if (!this.url) return this.onStatus({ kind: 'error', message: 'Partage indisponible : synchronisation non configurée.' });
+      let res;
+      try {
+        res = await fetch(`${this.url}/api/view/${this.view}`);
+      } catch {
+        return this.onStatus({ kind: 'error', message: 'Connexion impossible. Nouvel essai automatique.' });
+      }
+      if (res.status !== 200) return this.onStatus({ kind: 'error', message: 'Lien inconnu ou révoqué.' });
+      const { data } = await res.json();
+      if (data && stable(snapshot(this.store.data)) !== stable(snapshot(data))) {
+        this.store.replaceAll(Object.assign({}, this.store.data, data), 'remote');
+      }
+      this.onStatus({ kind: 'idle', at: new Date() });
+    }
+  }
+
   global.CloudSync = CloudSync;
+  global.CloudSync.View = CloudView;
   global.CloudSync.formatCode = formatCode;
   global.CloudSync.merge = merge;
   global.CloudSync.stable = stable;

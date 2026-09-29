@@ -1164,7 +1164,7 @@ describe('recherche de coordonnées', () => {
     const app = await withData({ paths: [PATH({ id: 'r' }), PATH({ id: 's', name: 'Sentier' }), PATH({ id: 'n', dim: 'nether' })] });
     go('7', '8');
     const select = popup().querySelector('select');
-    expect(select.className).toBe('append-path');
+    expect(select.className).toBe('append-path edit');
     expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([['', 'Ajouter au bout d’un chemin…'], ['r', 'Route'], ['s', 'Sentier']]);
     change(select, '');
     expect(popup()).not.toBeNull();
@@ -1435,6 +1435,38 @@ describe('panneau latéral', () => {
   });
 });
 
+describe('écrans tactiles', () => {
+  const pointer = (app, type) => app.map.getContainer().dispatchEvent(
+    Object.assign(new Event('pointerdown', { bubbles: true }), { pointerType: type }));
+
+  test('au doigt, les coordonnées suivent le centre ; à la souris, le curseur', async () => {
+    const app = await boot();
+    app.map.fire('mousemove', { latlng: ll(7, 8) });
+    app.map.setView(ll(40, -24), 0, { animate: false });
+    expect(text('#coords')).toContain('X 7  Z 8');
+    pointer(app, 'touch');
+    expect(document.body.classList.contains('touch')).toBe(true);
+    app.map.setView(ll(40, -24), 1, { animate: false });
+    expect(text('#coords')).toContain('X 40  Z -24');
+    pointer(app, 'mouse');
+    expect(document.body.classList.contains('touch')).toBe(false);
+    app.map.fire('mousemove', { latlng: ll(7, 8) });
+    app.map.setView(ll(90, 10), 1, { animate: false });
+    expect(text('#coords')).toContain('X 7  Z 8');
+  });
+
+  test('toucher la carte ferme le panneau sur petit écran seulement', async () => {
+    let app = await boot({ width: 500 });
+    document.body.classList.remove('sidebar-hidden');
+    app.map.fire('click', { latlng: ll(0, 0) });
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+    teardown();
+    app = await boot();
+    app.map.fire('click', { latlng: ll(0, 0) });
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(false);
+  });
+});
+
 const setFiles = (el, files) => {
   Object.defineProperty(el, 'files', { configurable: true, value: files });
   el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1490,7 +1522,7 @@ describe('export, import, effacement', () => {
     const app = await withData({ seed: 'graine', pois: [POI({ id: 'a' })] });
     vi.stubGlobal('confirm', vi.fn(() => false));
     $('#reset').click();
-    expect(confirm).toHaveBeenCalledWith('Effacer tous les lieux et chemins ? Cette action est irréversible (pensez à exporter).');
+    expect(confirm).toHaveBeenCalledWith('Effacer tous les lieux et chemins ? Ils restent récupérables avec Annuler ou l\'historique local.');
     expect(app.store.data.pois).toHaveLength(1);
     confirm.mockReturnValue(true);
     $('#new-path').click();
@@ -1500,6 +1532,70 @@ describe('export, import, effacement', () => {
     app.cloud.state = { code: 'ABCDEFGH', version: 0, base: null };
     $('#reset').click();
     expect(confirm.mock.calls.at(-1)[0]).toContain(' Les données seront aussi effacées du cloud et des appareils reliés.');
+  });
+});
+
+describe('historique local', () => {
+  const T = new Date(2026, 8, 29, 20, 15).getTime();
+  const MIN = 60 * 1000;
+  const entries = () => $$('#backup-list .item').map((li) => [li.querySelector('.item-name').textContent, li.querySelector('.item-sub').textContent]);
+  const clock = (t) => vi.useFakeTimers({ toFake: ['Date'], now: t });
+
+  test('copie à l’ouverture ; liste vide sans données', async () => {
+    clock(T);
+    await boot();
+    expect(text('#backup-list')).toBe('Aucune copie pour l\'instant.');
+    teardown();
+    await withData({ pois: [POI({ id: 'a' })] });
+    expect(entries()).toEqual([['29/09/2026 20:15', '1 lieu · 0 chemin']]);
+    expect(JSON.parse(localStorage.getItem('minecarte:backups'))[0].data.pois.map((p) => p.id)).toEqual(['a']);
+  });
+
+  test('une copie au plus toutes les 10 minutes', async () => {
+    clock(T);
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    app.store.savePoi(POI({ id: 'b' }));
+    vi.setSystemTime(T + 10 * MIN - 1);
+    app.store.savePoi(POI({ id: 'c' }));
+    expect(entries()).toEqual([['29/09/2026 20:15', '1 lieu · 0 chemin']]);
+    vi.setSystemTime(T + 10 * MIN);
+    app.store.savePoi(POI({ id: 'd' }));
+    expect(entries()).toEqual([['29/09/2026 20:25', '4 lieux · 0 chemin'], ['29/09/2026 20:15', '1 lieu · 0 chemin']]);
+  });
+
+  test('restaurer : confirmation, état actuel copié, annulable', async () => {
+    clock(T);
+    const old = { time: T - 60 * MIN, data: DATA({ pois: [POI({ id: 'old', name: 'Ancien' })], paths: [PATH({ id: 'r' })] }) };
+    const app = await withData({ pois: [POI({ id: 'a' })] }, { storage: { 'minecarte:backups': [old] } });
+    expect(entries()).toEqual([['29/09/2026 20:15', '1 lieu · 0 chemin'], ['29/09/2026 19:15', '1 lieu · 1 chemin']]);
+    app.store.savePoi(POI({ id: 'b' }));
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    button('Restaurer', $$('#backup-list .item')[1]).click();
+    expect(confirm).toHaveBeenCalledWith('Revenir à l\'état du 29/09/2026 19:15 ? L\'état actuel est d\'abord copié dans l\'historique.');
+    expect(app.store.data.pois).toHaveLength(2);
+    confirm.mockReturnValue(true);
+    $('#new-path').click();
+    button('Restaurer', $$('#backup-list .item')[1]).click();
+    expect(app.state.mode).toBe(null);
+    expect(app.store.data.pois.map((p) => p.id)).toEqual(['old']);
+    expect(app.store.data.paths.map((p) => p.id)).toEqual(['r']);
+    expect(text('#toast')).toBe('État du 29/09/2026 19:15 restauré.');
+    expect(entries().map((e) => e[1])).toEqual(['2 lieux · 0 chemin', '1 lieu · 0 chemin', '1 lieu · 1 chemin']);
+    $('#undo-btn').click();
+    expect(app.store.data.pois).toHaveLength(2);
+  });
+
+  test('import et effacement copient d’abord l’état actuel', async () => {
+    clock(T);
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    app.store.savePoi(POI({ id: 'b' }));
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    setFiles($('#import-file'), [{ text: async () => JSON.stringify(DATA({ pois: [POI({ id: 'x' })], paths: [PATH({})] })) }]);
+    await flush();
+    expect(entries().map((e) => e[1])).toEqual(['2 lieux · 0 chemin', '1 lieu · 0 chemin']);
+    $('#reset').click();
+    expect(app.store.data.pois).toEqual([]);
+    expect(entries().map((e) => e[1])).toEqual(['1 lieu · 1 chemin', '2 lieux · 0 chemin', '1 lieu · 0 chemin']);
   });
 });
 
@@ -1616,5 +1712,88 @@ describe('synchronisation cloud', () => {
     expect(app.cloud.code).toBe(null);
     expect($('#sync-off').hidden).toBe(false);
     expect($('#sync-badge').hidden).toBe(true);
+  });
+
+  test('lien de lecture seule : créer, copier, révoquer, masqué à la déconnexion', async () => {
+    const { app, server } = await start();
+    $('#sync-create').click();
+    await until(() => app.cloud.status.kind === 'idle');
+    expect($('#share-on').hidden).toBe(true);
+    $('#share-create').click();
+    await until(() => !$('#share-on').hidden);
+    const view = server.env.SYNC_KV.map.get(`share:${app.cloud.code}`);
+    expect($('#share-url').value).toBe(`${location.origin}/?vue=${view}`);
+    vi.stubGlobal('prompt', vi.fn());
+    $('#share-copy').click();
+    expect(prompt).toHaveBeenCalledWith('Copier :', `${location.origin}/?vue=${view}`);
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    $('#share-revoke').click();
+    expect(confirm).toHaveBeenCalledWith('Révoquer le lien en lecture seule ? Il ne fonctionnera plus pour personne.');
+    expect($('#share-on').hidden).toBe(false);
+    confirm.mockReturnValue(true);
+    $('#share-revoke').click();
+    await until(() => $('#share-on').hidden);
+    expect(text('#toast')).toBe('Lien révoqué.');
+    expect($('#share-url').value).toBe('');
+    expect(server.env.SYNC_KV.map.has(`view:${view}`)).toBe(false);
+
+    $('#share-create').click();
+    await until(() => !$('#share-on').hidden);
+    $('#sync-leave').click();
+    expect($('#share-on').hidden).toBe(true);
+  });
+
+  test('lien de lecture seule : erreurs affichées', async () => {
+    const { app } = await start();
+    vi.spyOn(app.cloud, 'share').mockRejectedValue(new Error('Pas de lien'));
+    vi.spyOn(app.cloud, 'unshare').mockRejectedValue(new Error('Pas de révocation'));
+    $('#share-create').click();
+    await until(() => text('#toast') === 'Pas de lien');
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    $('#share-revoke').click();
+    await until(() => text('#toast') === 'Pas de révocation');
+  });
+});
+
+describe('carte partagée en lecture seule (?vue=…)', () => {
+  const URL_ = 'https://sync.test';
+
+  async function shared() {
+    const server = createServer();
+    const { code } = await (await server.fetch(`${URL_}/api/sync`, { method: 'POST' })).json();
+    await server.fetch(`${URL_}/api/sync/${code}`, { method: 'PUT', body: JSON.stringify({ baseVersion: 0, data: DATA({ pois: [POI({ id: 's', name: 'Partagé' })] }) }) });
+    const { view } = await (await server.fetch(`${URL_}/api/sync/${code}/share`, { method: 'POST' })).json();
+    return { server, view };
+  }
+
+  test('données du lien affichées, rien n’est écrit dans le navigateur', async () => {
+    const { server, view } = await shared();
+    const own = DATA({ pois: [POI({ id: 'mine', name: 'À moi' })] });
+    const app = await boot({ syncUrl: URL_, fetch: server.fetch, search: `?vue=${view}`, storage: { 'minecarte:data': own } });
+    await until(() => app.store.data.pois.length === 1);
+    expect(app.store.data.pois.map((p) => p.name)).toEqual(['Partagé']);
+    expect([...$$('#poi-list .item-name')].map((el) => el.textContent)).toEqual(['Partagé']);
+    expect(document.body.classList.contains('readonly')).toBe(true);
+    expect($('#readonly').hidden).toBe(false);
+    expect($('#readonly').classList.contains('error')).toBe(false);
+    expect(text('#readonly-text')).toBe('👁 Lecture seule');
+    expect($('#readonly-exit').getAttribute('href')).toBe('/');
+    expect($('#sync-section').hidden).toBe(true);
+    expect(JSON.parse(localStorage.getItem('minecarte:data'))).toEqual(own);
+    expect(localStorage.getItem('minecarte:backups')).toBeNull();
+    expect(server.requests.at(-1)).toMatchObject({ method: 'GET', url: `${URL_}/api/view/${view}` });
+  });
+
+  test('lien révoqué ou inconnu : message d’erreur', async () => {
+    const { server } = await shared();
+    await boot({ syncUrl: URL_, fetch: server.fetch, search: '?vue=AAAAAAAA' });
+    await until(() => $('#readonly').classList.contains('error'));
+    expect(text('#readonly-text')).toBe('⚠ Lien inconnu ou révoqué.');
+  });
+
+  test('sans paramètre : carte normale, pas de mode lecture', async () => {
+    await boot();
+    expect(document.body.classList.contains('readonly')).toBe(false);
+    expect($('#readonly').hidden).toBe(true);
   });
 });

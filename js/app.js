@@ -7,7 +7,10 @@
   const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, parseCoords, searchItems, nearestSegment } = Utils;
   const OPTIONS_KEY = 'minecarte:options';
 
-  const store = new Store();
+  // ?vue=… : carte partagée en lecture seule, gardée en mémoire (rien n'est
+  // écrit dans le navigateur de la personne qui la consulte).
+  const viewId = new URLSearchParams(location.search).get('vue');
+  const store = new Store({ persist: !viewId });
   /** @type {(sel: string) => any} */
   const $ = (sel) => document.querySelector(sel);
   /** @type {(sel: string) => HTMLElement[]} */
@@ -324,9 +327,10 @@
         other.dim !== poi.dim ? dimBadge(other.dim) : null,
         h('span', { class: 'arrow' }, '➜')))) : null,
       h('div', { class: 'popup-actions' },
-        h('button', { type: 'button', onclick: () => openPoiDialog(poi) }, 'Modifier'),
+        h('button', { type: 'button', class: 'edit', onclick: () => openPoiDialog(poi) }, 'Modifier'),
         conv ? h('button', {
           type: 'button',
+          class: 'edit',
           title: `Créer un lieu lié dans ${conv.dim === 'nether' ? 'le Nether' : "l'Overworld"} aux coordonnées converties`,
           onclick: () => openPoiDialog({
             name: `${poi.name} (${DIM_LABELS[conv.dim]})`,
@@ -343,7 +347,7 @@
         h('button', { type: 'button', onclick: () => copy(`${poi.x} ${poi.y} ${poi.z}`) }, 'Copier'),
         h('button', {
           type: 'button',
-          class: 'danger',
+          class: 'danger edit',
           onclick: () => {
             if (confirm(`Supprimer le lieu « ${poi.name} » ?`)) {
               map.closePopup();
@@ -547,7 +551,7 @@
         h('span', { class: 'swatch-line', style: `background:${path.color}` }), path.name),
       h('div', { class: 'popup-sub' }, `${fmt(length)} blocs · ${path.points.length} points`),
       path.dim === 'nether' ? h('div', { class: 'popup-sub' }, `≈ ${fmt(length * 8)} blocs dans l'Overworld`) : null,
-      h('div', { class: 'popup-actions' },
+      h('div', { class: 'popup-actions edit' },
         h('button', { type: 'button', onclick: () => { map.closePopup(); openPathDialog(path); } }, 'Modifier'),
         h('button', { type: 'button', onclick: () => { map.closePopup(); startEditing(path.id); } }, 'Éditer le tracé'),
         h('button', { type: 'button', onclick: () => { map.closePopup(); startDrawing({ pathId: path.id }); } }, 'Prolonger'),
@@ -792,8 +796,17 @@
     }
   });
 
+  // Au doigt, pas de survol : les coordonnées suivent le centre de la carte, marqué d'une mire.
+  map.getContainer().addEventListener('pointerdown', (e) => {
+    document.body.classList.toggle('touch', e.pointerType === 'touch');
+  });
+  map.on('move', () => {
+    if (document.body.classList.contains('touch')) updateCoords(map.getCenter());
+  });
+
   map.on('click', (e) => {
     hideContextMenu();
+    closeSidebarOnMobile();
     if (state.mode === 'draw') {
       const { x, z } = fromLatLng(e.latlng);
       addDrawPoint(x, z);
@@ -817,11 +830,11 @@
   function showContextMenu(e) {
     const { x, z } = fromLatLng(e.latlng);
     const menu = $('#context-menu');
-    const item = (label, fn) => h('button', { type: 'button', onclick: () => { hideContextMenu(); fn(); } }, label);
+    const item = (label, fn, cls) => h('button', { type: 'button', class: cls, onclick: () => { hideContextMenu(); fn(); } }, label);
     menu.replaceChildren(
       h('div', { class: 'menu-title' }, `X ${x} · Z ${z}`),
-      item('📍 Ajouter un lieu ici', () => openPoiDialog({ x, z })),
-      item('〰 Commencer un chemin ici', () => startDrawing({ start: { x, z } })),
+      item('📍 Ajouter un lieu ici', () => openPoiDialog({ x, z }), 'edit'),
+      item('〰 Commencer un chemin ici', () => startDrawing({ start: { x, z } }), 'edit'),
       item('📋 Copier les coordonnées', () => copy(`${x} ~ ${z}`)),
       item('🎯 Centrer ici', () => map.panTo(e.latlng)));
     menu.hidden = false;
@@ -1023,9 +1036,9 @@
     const content = h('div', { class: 'location-popup' },
       h('div', { class: 'popup-title' }, '📌 ', `X ${x}${y === null ? '' : ` · Y ${y}`} · Z ${z}`),
       conv ? h('div', { class: 'popup-sub' }, `≈ ${DIM_LABELS[conv.dim]} : X ${conv.x}, Z ${conv.z}`) : null,
-      actions ? h('div', { class: 'popup-actions' }, actions) : null,
+      actions ? h('div', { class: 'popup-actions edit' }, actions) : null,
       !state.mode && paths.length ? h('select', {
-        class: 'append-path',
+        class: 'append-path edit',
         onchange: (e) => appendToPath(e.target.value, x, z),
       },
       h('option', { value: '' }, 'Ajouter au bout d’un chemin…'),
@@ -1111,6 +1124,7 @@
       if (!confirm('Remplacer toutes les données actuelles par celles du fichier ?')) return;
       cancelMode();
       map.closePopup();
+      saveBackup(true);
       store.replaceAll(raw);
       toast(`${store.data.pois.length} lieu(x) et ${store.data.paths.length} chemin(s) importés.`);
     } catch (err) {
@@ -1120,9 +1134,10 @@
 
   $('#reset').addEventListener('click', () => {
     const cloudNote = cloud.code ? ' Les données seront aussi effacées du cloud et des appareils reliés.' : '';
-    if (!confirm(`Effacer tous les lieux et chemins ? Cette action est irréversible (pensez à exporter).${cloudNote}`)) return;
+    if (!confirm(`Effacer tous les lieux et chemins ? Ils restent récupérables avec Annuler ou l'historique local.${cloudNote}`)) return;
     cancelMode();
     map.closePopup();
+    saveBackup(true);
     store.replaceAll({ seed: store.data.seed });
   });
 
@@ -1140,6 +1155,7 @@
     $('#sync-section').hidden = false;
     $('#sync-off').hidden = on;
     $('#sync-on').hidden = !on;
+    if (!on) showShare(null);
     $('#sync-code').textContent = CloudSync.formatCode(cloud.code);
     const time = status.at ? status.at.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
     const text = {
@@ -1187,6 +1203,37 @@
     }
   });
 
+  // --- Lien de lecture seule --------------------------------------------------------------------
+
+  function showShare(view) {
+    $('#share-on').hidden = !view;
+    $('#share-url').value = view ? `${location.origin}${location.pathname}?vue=${view}` : '';
+  }
+
+  $('#share-create').addEventListener('click', async () => {
+    try {
+      showShare(await cloud.share());
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  $('#share-copy').addEventListener('click', () => copy($('#share-url').value));
+  $('#share-revoke').addEventListener('click', async () => {
+    if (!confirm('Révoquer le lien en lecture seule ? Il ne fonctionnera plus pour personne.')) return;
+    try {
+      showShare(await cloud.unshare());
+      toast('Lien révoqué.');
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+
+  function renderView(status) {
+    const error = status.kind === 'error';
+    $('#readonly').classList.toggle('error', error);
+    $('#readonly-text').textContent = error ? `⚠ ${status.message}` : '👁 Lecture seule';
+  }
+
   $('#sync-copy').addEventListener('click', () => copy(CloudSync.formatCode(cloud.code)));
   $('#sync-now').addEventListener('click', () => cloud.pull());
   $('#sync-leave').addEventListener('click', () => {
@@ -1220,6 +1267,39 @@
     toast(message);
   }
 
+  // --- Historique local -----------------------------------------------------------------------
+
+  const backups = new Backups(localStorage, () => Date.now());
+
+  function saveBackup(force) {
+    if (!viewId && backups.save(store.data, force)) renderBackups();
+  }
+
+  function renderBackups() {
+    const list = backups.list();
+    $('#backup-list').replaceChildren(...(list.length ? list.map((entry) => {
+      const when = new Date(entry.time).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      return h('li', { class: 'item' },
+        h('span', { class: 'item-main' },
+          h('span', { class: 'item-name' }, when),
+          h('span', { class: 'item-sub' }, Backups.summary(entry.data))),
+        h('button', { type: 'button', onclick: () => restoreBackup(entry, when) }, 'Restaurer'));
+    }) : [h('li', { class: 'empty' }, 'Aucune copie pour l\'instant.')]));
+  }
+
+  function restoreBackup(entry, when) {
+    if (!confirm(`Revenir à l'état du ${when} ? L'état actuel est d'abord copié dans l'historique.`)) return;
+    cancelMode();
+    map.closePopup();
+    saveBackup(true);
+    store.replaceAll(entry.data);
+    toast(`État du ${when} restauré.`);
+  }
+
+  store.onChange(() => saveBackup(false));
+  saveBackup(false);
+  renderBackups();
+
   function undoChange() {
     restore(undo.undo(), 'Modification annulée.');
   }
@@ -1246,5 +1326,12 @@
 
   const initial = parseHash();
   setDimension(initial ? initial.dim : 'overworld', initial || state.views.overworld);
-  cloud.start();
+  if (viewId) {
+    document.body.classList.add('readonly');
+    $('#readonly').hidden = false;
+    $('#readonly-exit').href = location.pathname;
+    new CloudSync.View(store, cloud.url, viewId, renderView).start();
+  } else {
+    cloud.start();
+  }
 })();

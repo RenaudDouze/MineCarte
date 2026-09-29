@@ -95,3 +95,21 @@ test('annuler / rétablir une suppression', async ({ page }) => {
   await page.keyboard.press('Control+z');
   await expect(page.locator('#poi-list .item-name')).toHaveText(['Temple']);
 });
+
+test('historique local : restaurer un état après rechargement', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '+ Lieu' }).click();
+  await page.locator('#poi-form [name="label"]').fill('Premier');
+  await page.locator('#poi-form button[type="submit"]').click();
+  page.on('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  await page.getByRole('button', { name: 'Tout effacer' }).click();
+  await expect(page.locator('.poi-label')).toHaveCount(0);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  await expect(page.locator('#backup-list .item-sub')).toHaveText(['1 lieu · 0 chemin']);
+  await page.locator('#backup-list').getByRole('button', { name: 'Restaurer' }).click();
+  await expect(page.locator('.poi-label', { hasText: 'Premier' })).toBeVisible();
+  await expect(page.locator('#toast')).toContainText('restauré');
+});

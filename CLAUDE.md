@@ -7,7 +7,7 @@ Consignes pour Claude Code (claude.ai/code) sur ce dépôt.
 MineCarte : carte interactive de monde Minecraft (Leaflet), site statique publié sur GitHub
 Pages, sans étape de compilation. Scripts navigateur en IIFE attachés à `window`, chargés dans
 l'ordre par `index.html` : `vendor/leaflet`, `utils`, `noise`, `terrain`, `config`, `icons`,
-`store`, `sync`, `undo`, `app`. Worker Cloudflare de synchronisation dans `worker/`
+`store`, `sync`, `undo`, `backups`, `app`. Worker Cloudflare de synchronisation dans `worker/`
 (projet npm séparé, uniquement pour Wrangler).
 
 ## Commandes (racine)
