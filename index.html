@@ -51,6 +51,7 @@
       <section class="panel" data-panel="paths">
         <div class="row edit">
           <button type="button" id="new-path" class="primary grow">+ Tracer un chemin</button>
+          <button type="button" id="new-path-coords" title="Créer un chemin en saisissant ses coordonnées">Par coordonnées</button>
         </div>
         <ul id="path-list" class="list"></ul>
       </section>
@@ -118,6 +119,7 @@
           <li><b>Recherche</b> (<kbd>/</kbd>) : un nom de lieu ou de chemin, ou des coordonnées « X Z » / « X Y Z ». Depuis des coordonnées : depuis l'emplacement trouvé, créer un lieu, commencer un chemin, ajouter le point au bout d'un chemin ou au tracé en cours.</li>
           <li>Tracé : clic pour ajouter un point, clic sur un lieu pour s'y accrocher, <b>double-clic</b> ou <b>Entrée</b> pour terminer, <b>Retour arrière</b> pour annuler le dernier point, <b>Échap</b> pour abandonner.</li>
           <li>Édition d'un tracé : glissez les sommets, clic sur un segment pour insérer un point, clic droit sur un sommet pour le supprimer.</li>
+          <li><b>Par coordonnées</b> (onglet Chemins) : un point par ligne, « X Z » ou « X Y Z ». Le champ « Points » de « Modifier » corrige aussi un chemin existant.</li>
         </ul>
       </section>
     </aside>
@@ -193,6 +195,7 @@
     <form id="path-form" method="dialog" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
       <h2>Chemin</h2>
       <input type="hidden" name="id">
+      <input type="hidden" name="dim">
       <label>Nom <input name="label" type="text" maxlength="100" required autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></label>
       <div class="field">
         <span>Couleur</span>
@@ -206,6 +209,9 @@
         <input name="weight" type="range" min="1" max="16" step="1" value="4">
         <div class="weight-preview-box"><div id="weight-preview"></div></div>
       </div>
+      <label>Points <span class="hint">(un par ligne : X Z ou X Y Z)</span>
+        <textarea name="points" rows="6" spellcheck="false" placeholder="120 -340&#10;200 64 -340&#10;200 -500" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore></textarea>
+      </label>
       <p id="path-info" class="hint"></p>
       <div class="dialog-actions">
         <button type="button" data-close>Annuler</button>

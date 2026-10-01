@@ -45,7 +45,7 @@ button.danger { color: #ff9a9d; }
 button.danger:hover { border-color: var(--danger); }
 button[hidden] { display: none; }
 
-input[type="text"], input[type="number"], input[type="search"], select {
+input[type="text"], input[type="number"], input[type="search"], select, textarea {
   background: #14161b;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -379,7 +379,9 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
 dialog form { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 dialog h2 { margin: 0; font-size: 17px; }
 dialog label, dialog .field { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12.5px; }
-dialog label input, dialog label select { color: var(--text); font-size: 14px; }
+dialog label input, dialog label select, dialog label textarea { color: var(--text); font-size: 14px; }
+dialog textarea { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+#path-info.error { color: #ff9a9d; }
 .xyz { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .xyz input { width: 100%; }
 .color-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -499,7 +501,7 @@ body.readonly .edit { display: none !important; }
   .dim-btn { padding: 6px 12px; }
   .icon-btn { min-width: 38px; }
   /* 16 px : pas de zoom automatique d'iOS sur les champs. */
-  input[type="text"], input[type="number"], input[type="search"], select { font-size: 16px; padding: 7px 9px; }
+  input[type="text"], input[type="number"], input[type="search"], select, textarea { font-size: 16px; padding: 7px 9px; }
   .item { padding: 11px 8px; }
   .search-item { padding: 11px 8px; }
   .context-menu button { padding: 12px 14px; }

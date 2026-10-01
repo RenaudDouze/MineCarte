@@ -168,6 +168,32 @@ describe('recherche', () => {
     }
   });
 
+  test('parsePoints : une coordonnée par ligne, Y ignoré, lignes vides permises', () => {
+    expect(U().parsePoints('0 0\n\n  10 64 -20 \r\n30,~,40\n')).toEqual({ points: [[0, 0], [10, -20], [30, 40]], error: null });
+    expect(U().parsePoints('1.5 -2.5\n3 4')).toEqual({ points: [[1, -3], [3, 4]], error: null });
+  });
+
+  test('parsePoints : ligne illisible, numéro de ligne réel', () => {
+    expect(U().parsePoints('0 0\n\n  Base 12  \n5 5')).toEqual({
+      points: [[0, 0]],
+      error: 'Ligne 3 : « Base 12 » n\'est pas une coordonnée (X Z ou X Y Z).',
+    });
+    expect(U().parsePoints('x').error).toBe('Ligne 1 : « x » n\'est pas une coordonnée (X Z ou X Y Z).');
+  });
+
+  test('parsePoints : au moins 2 points', () => {
+    const error = 'Au moins 2 points, un par ligne (X Z ou X Y Z).';
+    expect(U().parsePoints('')).toEqual({ points: [], error });
+    expect(U().parsePoints(' \n 1 2 \n')).toEqual({ points: [[1, 2]], error });
+  });
+
+  test('formatPoints : une ligne « X Z » par point, relisible par parsePoints', () => {
+    const points = [[0, 0], [-12, 340], [5, -6]];
+    expect(U().formatPoints(points)).toBe('0 0\n-12 340\n5 -6');
+    expect(U().parsePoints(U().formatPoints(points))).toEqual({ points, error: null });
+    expect(U().formatPoints([])).toBe('');
+  });
+
   const pois = [
     { name: 'Village des plaines' }, { name: 'Élevage' }, { name: 'Base' }, { name: 'Grande base' }, { name: 'Mine' },
   ];

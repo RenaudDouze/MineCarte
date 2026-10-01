@@ -78,6 +78,26 @@
     return { x: block(m[1]), y: m[2] && m[2] !== '~' ? block(m[2]) : null, z: block(m[3]) };
   }
 
+  // Points d'un chemin saisis à la main : une coordonnée par ligne (« X Z » ou
+  // « X Y Z », Y ignoré), lignes vides permises. Renvoie { points, error } :
+  // error est null, ou le message de la première ligne illisible.
+  function parsePoints(text) {
+    const points = [];
+    const lines = String(text).split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const c = parseCoords(lines[i]);
+      if (!c) return { points, error: `Ligne ${i + 1} : « ${lines[i].trim()} » n'est pas une coordonnée (X Z ou X Y Z).` };
+      points.push([c.x, c.z]);
+    }
+    return { points, error: points.length < 2 ? 'Au moins 2 points, un par ligne (X Z ou X Y Z).' : null };
+  }
+
+  // Inverse de parsePoints : une ligne « X Z » par point.
+  function formatPoints(points) {
+    return points.map(([x, z]) => `${x} ${z}`).join('\n');
+  }
+
   // Lieux et chemins dont le nom contient la recherche (sans tenir compte des
   // accents ni de la casse) : ceux dont le nom commence par elle d'abord, puis
   // par ordre alphabétique ; au plus `limit` résultats.
@@ -129,5 +149,5 @@
     return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   }
 
-  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, normalize, parseCoords, searchItems, nearestSegment, segmentDistance };
+  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, normalize, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment, segmentDistance };
 })(window);
