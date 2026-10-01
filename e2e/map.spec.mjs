@@ -22,9 +22,9 @@ test('recherche de coordonnées puis création d’un chemin', async ({ page }) 
   const map = page.locator('#map');
   await map.click({ position: { x: 200, y: 150 } });
   await map.click({ position: { x: 320, y: 260 } });
-  await expect(page.locator('#mode-text')).toContainText('3 point(s)');
+  await expect(page.locator('#mode-text')).toContainText('· 3 points');
   await page.locator('#mode-undo').click();
-  await expect(page.locator('#mode-text')).toContainText('2 point(s)');
+  await expect(page.locator('#mode-text')).toContainText('· 2 points');
   await page.locator('#mode-finish').click();
 
   await expect(page.locator('#path-dialog')).toBeVisible();
@@ -109,4 +109,26 @@ test('chemin saisi par coordonnées, puis corrigé', async ({ page }) => {
   await points.fill('0 0\n100 0');
   await page.locator('#path-form button[type="submit"]').click();
   await expect(page.locator('#path-list .item-sub')).toContainText('100 blocs');
+});
+
+test('zone : polygone tracé à la souris, aire affichée', async ({ page }) => {
+  await page.goto('/#overworld/0/0/0');
+  await page.locator('.tab[data-tab="paths"]').click();
+  await page.getByRole('button', { name: '+ Tracer une zone' }).click();
+  const map = page.locator('#map');
+  const box = await map.boundingBox();
+  const at = (dx, dz) => ({ position: { x: box.width / 2 + dx, y: box.height / 2 + dz } });
+  await map.click(at(0, 0));
+  await map.click(at(100, 0));
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#toast')).toHaveText('Une zone doit avoir au moins 3 points.');
+  await map.click(at(100, 50));
+  await map.click(at(0, 50));
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#path-form [name="closed"]')).toBeChecked();
+  await page.locator('#path-form [name="label"]').fill('Champ de blé');
+  await page.locator('#path-form button[type="submit"]').click();
+  await expect(page.locator('#path-list .item-name')).toHaveText(['Champ de blé']);
+  await expect(page.locator('#path-list .item-sub')).toHaveText(/^5.000 blocs² · périmètre 300 blocs · 4 points$/);
+  await expect(page.locator('#map path.leaflet-interactive[fill-opacity="0.2"]')).toHaveCount(1);
 });

@@ -44,6 +44,10 @@ python3 -m http.server 8000
     `Entrée` pour terminer, `Retour arrière` pour annuler le dernier point, `Échap` pour abandonner.
   - Édition : glisser un sommet pour le déplacer, clic sur un segment pour insérer un point,
     clic droit sur un sommet pour le supprimer. « Prolonger » ajoute des points à la fin.
+  - Zones : « + Tracer une zone » (ou « Commencer une zone ici » au clic droit) trace un polygone
+    fermé, rempli de sa couleur, avec son aire en blocs² et son périmètre. Une zone se trace,
+    s'édite et se prolonge comme un chemin (au moins 3 points) ; la case « Zone » du dialogue
+    transforme un chemin en zone et inversement.
   - Par coordonnées : « Par coordonnées » (onglet Chemins) crée un chemin à partir d'une liste
     de points, un par ligne (`X Z` ou `X Y Z`, Y ignoré). Le même champ « Points » du dialogue
     « Modifier » permet de corriger les points d'un chemin existant au bloc près.
@@ -137,7 +141,9 @@ Coordonnées : la carte utilise `L.CRS.Simple`, avec 1 pixel = 1 bloc au zoom 0,
   ],
   "paths": [
     { "id": "…", "name": "Route", "color": "#ffeb3b", "dim": "nether", "weight": 4,
-      "points": [[15, -42], [80, -42]] }
+      "points": [[15, -42], [80, -42]] },
+    { "id": "…", "name": "Ferme", "color": "#43a047", "dim": "overworld", "weight": 2,
+      "points": [[0, 0], [100, 0], [100, 50]], "closed": true }
   ]
 }
 ```

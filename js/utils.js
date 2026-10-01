@@ -54,6 +54,27 @@
     return n.toLocaleString('fr-FR');
   }
 
+  // Aire d'un polygone (formule du lacet), en blocs², arrondie.
+  function polygonArea(points) {
+    const twice = points.reduce((sum, [x1, z1], i) => {
+      const [x2, z2] = points[(i + 1) % points.length];
+      return sum + x1 * z2 - x2 * z1;
+    }, 0);
+    return Math.round(Math.abs(twice) / 2);
+  }
+
+  // Sommets d'une zone avec le premier répété à la fin (segment de fermeture).
+  function ring(points) {
+    return [...points, points[0]];
+  }
+
+  // « 120 blocs · 3 points » pour un chemin ; aire et périmètre pour une zone.
+  function pathSummary(points, closed) {
+    return closed
+      ? `${fmt(polygonArea(points))} blocs² · périmètre ${fmt(pathLength(ring(points)))} blocs · ${points.length} points`
+      : `${fmt(pathLength(points))} blocs · ${points.length} points`;
+  }
+
   // Conversion Overworld <-> Nether (facteur 8) ; null pour l'End.
   function convert(dim, x, z) {
     if (dim === 'overworld') return { dim: 'nether', x: Math.floor(x / 8), z: Math.floor(z / 8) };
@@ -79,9 +100,9 @@
   }
 
   // Points d'un chemin saisis à la main : une coordonnée par ligne (« X Z » ou
-  // « X Y Z », Y ignoré), lignes vides permises. Renvoie { points, error } :
-  // error est null, ou le message de la première ligne illisible.
-  function parsePoints(text) {
+  // « X Y Z », Y ignoré), lignes vides permises, au moins `min` points.
+  // Renvoie { points, error } : error est null, ou le message du problème.
+  function parsePoints(text, min) {
     const points = [];
     const lines = String(text).split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -90,7 +111,7 @@
       if (!c) return { points, error: `Ligne ${i + 1} : « ${lines[i].trim()} » n'est pas une coordonnée (X Z ou X Y Z).` };
       points.push([c.x, c.z]);
     }
-    return { points, error: points.length < 2 ? 'Au moins 2 points, un par ligne (X Z ou X Y Z).' : null };
+    return { points, error: points.length < min ? `Au moins ${min} points, un par ligne (X Z ou X Y Z).` : null };
   }
 
   // Inverse de parsePoints : une ligne « X Z » par point.
@@ -149,5 +170,5 @@
     return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   }
 
-  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, normalize, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment, segmentDistance };
+  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, polygonArea, ring, pathSummary, convert, extent, normalize, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment, segmentDistance };
 })(window);

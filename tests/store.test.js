@@ -160,6 +160,14 @@ describe('nettoyage des chemins', () => {
     expect(w(7.4)).toBe(7);
   });
 
+  test('zones : polygone fermé d’au moins 3 points, sinon chemin', () => {
+    const closed = (raw) => load({ paths: [{ id: 'z', points: [[0, 0], [5, 0], [5, 5]], ...raw }] }).paths[0];
+    expect(closed({ closed: true })).toEqual({ id: 'z', name: 'Chemin', color: '#ffeb3b', dim: 'overworld', weight: 4, points: [[0, 0], [5, 0], [5, 5]], closed: true });
+    expect(closed({})).not.toHaveProperty('closed');
+    expect(closed({ closed: 'oui' })).not.toHaveProperty('closed');
+    expect(closed({ closed: true, points: [[0, 0], [5, 0]] })).not.toHaveProperty('closed');
+  });
+
   test('chemins invalides ignorés', () => {
     const paths = load({
       paths: [null, { id: 'a' }, { id: 'b', points: 'x' }, { id: 'c', points: [[0, 0]] }, { id: 'd', points: [[0, 0], [1]] }, { points: [[0, 0], [1, 1]] }, { id: '', name: 'x'.repeat(120), points: [[0, 0], [1, 1]] }],
@@ -273,6 +281,16 @@ describe('Store', () => {
     store.deletePath(p.id);
     expect(store.getPath(p.id)).toBeUndefined();
     expect(store.data.paths).toHaveLength(4);
+  });
+
+  test('zones : drapeau closed posé et retiré', () => {
+    const z = store.savePath({ name: 'Zone', closed: true, points: [[0, 0], [5, 0], [5, 5]] });
+    expect(z.closed).toBe(true);
+    store.savePath({ ...z, name: 'Toujours zone' });
+    expect(store.getPath(z.id).closed).toBe(true);
+    store.savePath({ ...z, closed: false });
+    expect(store.getPath(z.id)).not.toHaveProperty('closed');
+    expect(store.savePath({ name: 'C', points: [[0, 0], [1, 1]] })).not.toHaveProperty('closed');
   });
 
   test('chaque modification est sauvegardée et notifiée', () => {

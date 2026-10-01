@@ -106,6 +106,8 @@
         dim: dimension(path.dim),
         weight: weight(path.weight),
         points,
+        // Zone (polygone fermé) : seulement avec au moins 3 points.
+        ...(path.closed === true && points.length >= 3 ? { closed: true } : {}),
       });
     }
 
@@ -201,6 +203,8 @@
       path.dim = dimension(input.dim);
       path.weight = weight(input.weight);
       if (input.points) path.points = input.points.map((pt) => [int(pt[0], 0), int(pt[1], 0)]);
+      if (input.closed) path.closed = true;
+      else delete path.closed;
       this.save();
       return path;
     }

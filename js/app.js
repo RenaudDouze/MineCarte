@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment } = Utils;
+  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, ring, pathSummary, convert, extent, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment } = Utils;
   const OPTIONS_KEY = 'minecarte:options';
 
   // ?vue=… : carte partagée en lecture seule, gardée en mémoire (rien n'est
@@ -247,9 +247,13 @@
       if (path.dim !== state.dim) continue;
       if ((state.draw && state.draw.pathId === path.id) || (state.edit && state.edit.pathId === path.id)) continue;
       const latlngs = path.points.map(([x, z]) => toLatLng(x, z));
-      L.polyline(latlngs, { pane: 'pathPane', color: '#000', weight: path.weight + 3, opacity: 0.35, interactive: false })
+      // Zone : polygone fermé, rempli de sa couleur.
+      const Shape = path.closed ? L.Polygon : L.Polyline;
+      new Shape(latlngs, { pane: 'pathPane', color: '#000', weight: path.weight + 3, opacity: 0.35, fill: false, interactive: false })
         .addTo(pathLayer);
-      const line = L.polyline(latlngs, { pane: 'pathPane', color: path.color, weight: path.weight, opacity: 0.95 });
+      const line = new Shape(latlngs, {
+        pane: 'pathPane', color: path.color, weight: path.weight, opacity: 0.95, fillColor: path.color, fillOpacity: 0.2,
+      });
       line.on('click', (e) => {
         if (state.mode) return;
         openPathPopup(path, e.latlng);
@@ -260,6 +264,11 @@
 
     renderCategoryFilter();
     renderLists();
+  }
+
+  // Trait pour un chemin, carré plein pour une zone.
+  function pathSwatch(path) {
+    return h('span', { class: path.closed ? 'swatch-zone' : 'swatch-line', style: `background:${path.color}` });
   }
 
   function dimBadge(dim) {
@@ -291,12 +300,12 @@
     const paths = store.data.paths.filter((p) => p.dim === state.dim);
     const pathList = $('#path-list');
     pathList.replaceChildren(...paths.map((path) => h('li', { class: 'item', onclick: () => focusPath(path.id) },
-      h('span', { class: 'swatch-line', style: `background:${path.color}` }),
+      pathSwatch(path),
       h('span', { class: 'item-main' },
         h('span', { class: 'item-name' }, path.name),
-        h('span', { class: 'item-sub' }, `${fmt(pathLength(path.points))} blocs · ${path.points.length} points`)))));
+        h('span', { class: 'item-sub' }, pathSummary(path.points, path.closed))))));
     if (!paths.length) {
-      pathList.append(h('li', { class: 'empty' }, 'Aucun chemin dans cette dimension. Clic droit sur la carte ou « + Tracer un chemin ».'));
+      pathList.append(h('li', { class: 'empty' }, 'Aucun chemin ni zone dans cette dimension. Clic droit sur la carte, « + Tracer un chemin » ou « + Tracer une zone ».'));
     }
   }
 
@@ -545,12 +554,11 @@
   // --- Chemins : popup, dialogue ---------------------------------------------------
 
   function openPathPopup(path, latlng) {
-    const length = pathLength(path.points);
     const content = h('div', { class: 'path-popup' },
-      h('div', { class: 'popup-title' },
-        h('span', { class: 'swatch-line', style: `background:${path.color}` }), path.name),
-      h('div', { class: 'popup-sub' }, `${fmt(length)} blocs · ${path.points.length} points`),
-      path.dim === 'nether' ? h('div', { class: 'popup-sub' }, `≈ ${fmt(length * 8)} blocs dans l'Overworld`) : null,
+      h('div', { class: 'popup-title' }, pathSwatch(path), path.name),
+      h('div', { class: 'popup-sub' }, pathSummary(path.points, path.closed)),
+      path.dim === 'nether' && !path.closed
+        ? h('div', { class: 'popup-sub' }, `≈ ${fmt(pathLength(path.points) * 8)} blocs dans l'Overworld`) : null,
       h('div', { class: 'popup-actions edit' },
         h('button', { type: 'button', onclick: () => { map.closePopup(); openPathDialog(path); } }, 'Modifier'),
         h('button', { type: 'button', onclick: () => { map.closePopup(); startEditing(path.id); } }, 'Éditer le tracé'),
@@ -559,7 +567,7 @@
           type: 'button',
           class: 'danger',
           onclick: () => {
-            if (confirm(`Supprimer le chemin « ${path.name} » ?`)) {
+            if (confirm(`Supprimer ${path.closed ? 'la zone' : 'le chemin'} « ${path.name} » ?`)) {
               map.closePopup();
               store.deletePath(path.id);
             }
@@ -588,6 +596,7 @@
     form.elements.color.value = path.color;
     form.elements.weight.value = path.weight;
     form.elements.points.value = formatPoints(path.points);
+    form.elements.closed.checked = !!path.closed;
     updateWeightPreview();
     updatePathInfo();
     $('#path-dialog').showModal();
@@ -599,13 +608,15 @@
   // Longueur et nombre de points saisis, ou la ligne illisible.
   function updatePathInfo() {
     const f = $('#path-form').elements;
-    const { points, error } = parsePoints(f.points.value);
+    const closed = f.closed.checked;
+    const { points, error } = parsePoints(f.points.value, closed ? 3 : 2);
     $('#path-info').classList.toggle('error', !!error);
-    $('#path-info').textContent = error || `${DIM_LABELS[f.dim.value]} · ${fmt(pathLength(points))} blocs · ${points.length} points`;
+    $('#path-info').textContent = error || `${DIM_LABELS[f.dim.value]} · ${closed ? 'zone de ' : ''}${pathSummary(points, closed)}`;
     return points;
   }
 
   $('#path-form').elements.points.addEventListener('input', updatePathInfo);
+  $('#path-form').elements.closed.addEventListener('change', updatePathInfo);
 
   $('#path-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -620,7 +631,7 @@
     // Chemin supprimé entre-temps (autre appareil) : rien à enregistrer.
     if (f.id.value && !path) return;
     const saved = store.savePath(Object.assign({}, path || { dim: f.dim.value }, {
-      name: f.label.value, color: f.color.value, weight: f.weight.value, points,
+      name: f.label.value, color: f.color.value, weight: f.weight.value, points, closed: f.closed.checked,
     }));
     if (!path) focusPath(saved.id);
   });
@@ -635,18 +646,21 @@
     return SWATCHES[store.data.paths.length % 8];
   }
 
-  function startDrawing({ pathId = null, start = null } = {}) {
+  function startDrawing({ pathId = null, start = null, closed = false } = {}) {
     cancelMode();
     map.closePopup();
     const existing = pathId && store.getPath(pathId);
     const color = existing ? existing.color : nextPathColor();
     const weight = existing ? existing.weight : 4;
+    const isZone = existing ? !!existing.closed : closed;
+    const Shape = isZone ? L.Polygon : L.Polyline;
     state.mode = 'draw';
     state.draw = {
       pathId: existing ? existing.id : null,
       points: existing ? existing.points.map((p) => p.slice()) : [],
       color,
-      line: L.polyline([], { pane: 'pathPane', color, weight, interactive: false }).addTo(drawLayer),
+      closed: isZone,
+      line: new Shape([], { pane: 'pathPane', color, weight, fillColor: color, fillOpacity: 0.2, interactive: false }).addTo(drawLayer),
       preview: L.polyline([], { pane: 'pathPane', color, weight: 2, dashArray: '6 6', interactive: false }).addTo(drawLayer),
       vertices: L.layerGroup().addTo(drawLayer),
     };
@@ -680,14 +694,14 @@
     latlngs.forEach((ll) => L.circleMarker(ll, {
       pane: 'pathPane', radius: 4, color: '#fff', weight: 2, fillColor: d.color, fillOpacity: 1, interactive: false,
     }).addTo(d.vertices));
-    showBanner(`Tracé${d.pathId ? ' (prolongement)' : ''} — ${d.points.length} point(s), ${fmt(pathLength(d.points))} blocs. ` +
+    showBanner(`Tracé${d.closed ? ' de zone' : ''}${d.pathId ? ' (prolongement)' : ''} — ${pathSummary(d.points, d.closed)}. ` +
       'Clic : ajouter · clic sur un lieu : s’y accrocher · double-clic / Entrée : terminer', true);
   }
 
   function finishDrawing() {
     const d = state.draw;
-    if (d.points.length < 2) {
-      toast('Un chemin doit avoir au moins 2 points.');
+    if (d.points.length < (d.closed ? 3 : 2)) {
+      toast(d.closed ? 'Une zone doit avoir au moins 3 points.' : 'Un chemin doit avoir au moins 2 points.');
       return;
     }
     const points = d.points;
@@ -697,10 +711,11 @@
       store.savePath(Object.assign({}, existing, { points }));
     } else {
       const path = store.savePath({
-        name: `Chemin ${store.data.paths.length + 1}`,
+        name: `${d.closed ? 'Zone' : 'Chemin'} ${store.data.paths.length + 1}`,
         color: d.color,
         dim: state.dim,
         points,
+        closed: d.closed,
       });
       openPathDialog(path);
     }
@@ -713,11 +728,14 @@
     const path = store.getPath(pathId);
     if (!path) return;
     state.mode = 'edit';
+    const Shape = path.closed ? L.Polygon : L.Polyline;
     state.edit = {
       pathId,
       name: path.name,
+      closed: !!path.closed,
       points: path.points.map((p) => p.slice()),
-      line: L.polyline([], { pane: 'pathPane', color: path.color, weight: Math.max(path.weight + 2, 6) }).addTo(drawLayer),
+      line: new Shape([], { pane: 'pathPane', color: path.color, weight: Math.max(path.weight + 2, 6), fillColor: path.color, fillOpacity: 0.2 })
+        .addTo(drawLayer),
       vertices: L.layerGroup().addTo(drawLayer),
     };
     state.edit.line.on('click', (e) => {
@@ -744,8 +762,8 @@
       m.on('dragend', () => rebuildEdit());
       m.on('contextmenu', (e) => {
         L.DomEvent.stop(e);
-        if (ed.points.length <= 2) {
-          toast('Un chemin doit garder au moins 2 points.');
+        if (ed.points.length <= (ed.closed ? 3 : 2)) {
+          toast(ed.closed ? 'Une zone doit garder au moins 3 points.' : 'Un chemin doit garder au moins 2 points.');
           return;
         }
         ed.points.splice(i, 1);
@@ -753,14 +771,15 @@
       });
       m.addTo(ed.vertices);
     });
-    showBanner(`Édition de « ${ed.name} » — ${ed.points.length} points, ${fmt(pathLength(ed.points))} blocs. ` +
+    showBanner(`Édition de « ${ed.name} » — ${pathSummary(ed.points, ed.closed)}. ` +
       'Glisser : déplacer · clic sur un segment : insérer · clic droit sur un sommet : supprimer', false);
   }
 
   function insertEditPoint(latlng) {
     const ed = state.edit;
     const vertices = ed.points.map(([x, z]) => map.latLngToLayerPoint(toLatLng(x, z)));
-    const best = nearestSegment(map.latLngToLayerPoint(latlng), vertices);
+    // Zone : le segment de fermeture (dernier → premier) compte aussi.
+    const best = nearestSegment(map.latLngToLayerPoint(latlng), ed.closed ? ring(vertices) : vertices);
     const pt = fromLatLng(latlng);
     ed.points.splice(best + 1, 0, [pt.x, pt.z]);
     rebuildEdit();
@@ -861,6 +880,7 @@
       h('div', { class: 'menu-title' }, `X ${x} · Z ${z}`),
       item('📍 Ajouter un lieu ici', () => openPoiDialog({ x, z }), 'edit'),
       item('〰 Commencer un chemin ici', () => startDrawing({ start: { x, z } }), 'edit'),
+      item('⬠ Commencer une zone ici', () => startDrawing({ start: { x, z }, closed: true }), 'edit'),
       item('📋 Copier les coordonnées', () => copy(`${x} ~ ${z}`)),
       item('🎯 Centrer ici', () => map.panTo(e.latlng)));
     menu.hidden = false;
@@ -970,8 +990,8 @@
           run: () => focusPoi(item.id),
         }
         : {
-          content: searchLine(h('span', { class: 'swatch-line', style: `background:${item.color}` }), item.name,
-            `${DIM_LABELS[item.dim]} · chemin de ${fmt(pathLength(item.points))} blocs`),
+          content: searchLine(pathSwatch(item), item.name,
+            `${DIM_LABELS[item.dim]} · ${item.closed ? 'zone' : 'chemin'} · ${pathSummary(item.points, item.closed)}`),
           run: () => focusPath(item.id),
         });
     }
@@ -1056,6 +1076,7 @@
           openPoiDialog(y === null ? { x, z } : { x, y, z });
         }, 'primary'),
         btn('〰 Commencer un chemin', () => startDrawing({ start: { x, z } })),
+        btn('⬠ Commencer une zone', () => startDrawing({ start: { x, z }, closed: true })),
       ];
     }
 
@@ -1116,6 +1137,10 @@
   $('#new-path').addEventListener('click', () => {
     closeSidebarOnMobile();
     startDrawing();
+  });
+  $('#new-zone').addEventListener('click', () => {
+    closeSidebarOnMobile();
+    startDrawing({ closed: true });
   });
   $('#new-path-coords').addEventListener('click', () => {
     cancelMode();
