@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, parseCoords, searchItems, nearestSegment } = Utils;
+  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, convert, extent, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment } = Utils;
   const OPTIONS_KEY = 'minecarte:options';
 
   // ?vue=… : carte partagée en lecture seule, gardée en mémoire (rien n'est
@@ -578,25 +578,51 @@
     closeSidebarOnMobile();
   }
 
+  // Chemin existant, ou nouveau chemin (sans id) dont les points se saisissent
+  // dans le dialogue.
   function openPathDialog(path) {
     const form = $('#path-form');
-    form.elements.id.value = path.id;
+    form.elements.id.value = path.id || '';
+    form.elements.dim.value = path.dim;
     form.elements.label.value = path.name;
     form.elements.color.value = path.color;
     form.elements.weight.value = path.weight;
+    form.elements.points.value = formatPoints(path.points);
     updateWeightPreview();
-    $('#path-info').textContent = `${DIM_LABELS[path.dim]} · ${fmt(pathLength(path.points))} blocs · ${path.points.length} points`;
+    updatePathInfo();
     $('#path-dialog').showModal();
-    form.elements.label.focus();
-    form.elements.label.select();
+    const first = path.id ? form.elements.label : form.elements.points;
+    first.focus();
+    first.select();
   }
+
+  // Longueur et nombre de points saisis, ou la ligne illisible.
+  function updatePathInfo() {
+    const f = $('#path-form').elements;
+    const { points, error } = parsePoints(f.points.value);
+    $('#path-info').classList.toggle('error', !!error);
+    $('#path-info').textContent = error || `${DIM_LABELS[f.dim.value]} · ${fmt(pathLength(points))} blocs · ${points.length} points`;
+    return points;
+  }
+
+  $('#path-form').elements.points.addEventListener('input', updatePathInfo);
 
   $('#path-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target.elements;
+    const points = updatePathInfo();
+    if ($('#path-info').classList.contains('error')) {
+      f.points.focus();
+      return;
+    }
     const path = store.getPath(f.id.value);
-    if (path) store.savePath(Object.assign({}, path, { name: f.label.value, color: f.color.value, weight: f.weight.value }));
     $('#path-dialog').close();
+    // Chemin supprimé entre-temps (autre appareil) : rien à enregistrer.
+    if (f.id.value && !path) return;
+    const saved = store.savePath(Object.assign({}, path || { dim: f.dim.value }, {
+      name: f.label.value, color: f.color.value, weight: f.weight.value, points,
+    }));
+    if (!path) focusPath(saved.id);
   });
 
   document.querySelectorAll('dialog [data-close]').forEach((btn) => {
@@ -1090,6 +1116,10 @@
   $('#new-path').addEventListener('click', () => {
     closeSidebarOnMobile();
     startDrawing();
+  });
+  $('#new-path-coords').addEventListener('click', () => {
+    cancelMode();
+    openPathDialog({ name: `Chemin ${store.data.paths.length + 1}`, color: nextPathColor(), weight: 4, dim: state.dim, points: [] });
   });
 
   // Réglages

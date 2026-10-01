@@ -44,6 +44,9 @@ python3 -m http.server 8000
     `Entrée` pour terminer, `Retour arrière` pour annuler le dernier point, `Échap` pour abandonner.
   - Édition : glisser un sommet pour le déplacer, clic sur un segment pour insérer un point,
     clic droit sur un sommet pour le supprimer. « Prolonger » ajoute des points à la fin.
+  - Par coordonnées : « Par coordonnées » (onglet Chemins) crée un chemin à partir d'une liste
+    de points, un par ligne (`X Z` ou `X Y Z`, Y ignoré). Le même champ « Points » du dialogue
+    « Modifier » permet de corriger les points d'un chemin existant au bloc près.
 - **Recherche globale** (champ en haut, raccourci `/`) : trouve un lieu ou un chemin par son nom
   (sans tenir compte des accents ni de la casse, toutes dimensions confondues) ou des coordonnées
   `X Z` / `X Y Z` (`~` pour ignorer Y). Flèches pour choisir, `Entrée` pour y aller. Depuis des

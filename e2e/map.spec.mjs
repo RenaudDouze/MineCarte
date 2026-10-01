@@ -85,3 +85,28 @@ test('recherche globale : un lieu d’une autre dimension', async ({ page }) => 
   await expect(page.locator('body')).toHaveAttribute('data-dim', 'nether');
   await expect(page.locator('.leaflet-popup-content .popup-title')).toHaveText('Forteresse');
 });
+
+test('chemin saisi par coordonnées, puis corrigé', async ({ page }) => {
+  await page.goto('/#overworld/0/0/0');
+  await page.locator('.tab[data-tab="paths"]').click();
+  await page.getByRole('button', { name: 'Par coordonnées' }).click();
+  const points = page.locator('#path-form [name="points"]');
+  await expect(points).toBeFocused();
+  await points.fill('0 0\n100 64 0\nnulle part');
+  await expect(page.locator('#path-info')).toHaveText('Ligne 3 : « nulle part » n\'est pas une coordonnée (X Z ou X Y Z).');
+  await page.locator('#path-form button[type="submit"]').click();
+  await expect(page.locator('#path-dialog')).toBeVisible();
+  await points.fill('0 0\n100 64 0\n100 -50');
+  await expect(page.locator('#path-info')).toHaveText('Overworld · 150 blocs · 3 points');
+  await page.locator('#path-form [name="label"]').fill('Voie ferrée');
+  await page.locator('#path-form button[type="submit"]').click();
+  await expect(page.locator('#path-dialog')).toBeHidden();
+  await expect(page.locator('#path-list .item-name')).toHaveText(['Voie ferrée']);
+  await expect(page.locator('.leaflet-popup-content .popup-sub').first()).toHaveText('150 blocs · 3 points');
+
+  await page.locator('.leaflet-popup-content').getByRole('button', { name: 'Modifier' }).click();
+  await expect(points).toHaveValue('0 0\n100 0\n100 -50');
+  await points.fill('0 0\n100 0');
+  await page.locator('#path-form button[type="submit"]').click();
+  await expect(page.locator('#path-list .item-sub')).toContainText('100 blocs');
+});

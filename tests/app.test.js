@@ -761,6 +761,53 @@ describe('chemins', () => {
     expect(app.store.data.paths).toEqual([]);
   });
 
+  test('dialogue : points modifiables à la main', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Modifier', popup()).click();
+    const f = $('#path-form').elements;
+    expect(f.points.value).toBe('0 0\n30 40');
+    input(f.points, '0 0\n30 64 40\n30 100');
+    expect(text('#path-info')).toBe('Overworld · 110 blocs · 3 points');
+    expect($('#path-info').classList.contains('error')).toBe(false);
+    input(f.points, '0 0\nici');
+    expect(text('#path-info')).toBe('Ligne 2 : « ici » n\'est pas une coordonnée (X Z ou X Y Z).');
+    expect($('#path-info').classList.contains('error')).toBe(true);
+    submit($('#path-form'));
+    expect($('#path-dialog').open).toBe(true);
+    expect(document.activeElement).toBe(f.points);
+    expect(app.store.getPath('r').points).toEqual([[0, 0], [30, 40]]);
+    input(f.points, '0 0\n30 64 40\n30 100');
+    submit($('#path-form'));
+    expect($('#path-dialog').open).toBe(false);
+    expect(app.store.getPath('r').points).toEqual([[0, 0], [30, 40], [30, 100]]);
+    expect(app.store.data.paths).toHaveLength(1);
+  });
+
+  test('nouveau chemin par coordonnées : dimension affichée, au moins 2 points', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] }, { hash: '#nether/0/0/0' });
+    $('#new-path').click();
+    expect(app.state.mode).toBe('draw');
+    $('#new-path-coords').click();
+    expect(app.state.mode).toBe(null);
+    const f = $('#path-form').elements;
+    expect($('#path-dialog').open).toBe(true);
+    expect([f.id.value, f.label.value, f.color.value, f.weight.value, f.points.value]).toEqual(['', 'Chemin 2', Utils.SWATCHES[1], '4', '']);
+    expect(document.activeElement).toBe(f.points);
+    expect(text('#path-info')).toBe('Au moins 2 points, un par ligne (X Z ou X Y Z).');
+    submit($('#path-form'));
+    expect($('#path-dialog').open).toBe(true);
+    expect(app.store.data.paths).toHaveLength(1);
+    input(f.points, '80 -16\n80 64 -48\n\n120 -48');
+    expect(text('#path-info')).toBe('Nether · 72 blocs · 3 points');
+    f.label.value = 'Tunnel';
+    submit($('#path-form'));
+    expect($('#path-dialog').open).toBe(false);
+    const created = app.store.data.paths[1];
+    expect(created).toMatchObject({ name: 'Tunnel', dim: 'nether', color: Utils.SWATCHES[1], weight: 4, points: [[80, -16], [80, -48], [120, -48]] });
+    expect(popup().querySelector('.popup-title').textContent).toBe('Tunnel');
+  });
+
   test('suppression avec confirmation', async () => {
     const app = await withData({ paths: [PATH({ id: 'r' })] });
     vi.stubGlobal('confirm', vi.fn(() => false));
