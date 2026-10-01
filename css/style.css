@@ -156,7 +156,7 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
 .item:hover { background: var(--panel-2); }
 .item-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .item-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-sub { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.item-sub { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-links { color: var(--muted); font-size: 12px; }
 .empty { color: var(--muted); padding: 12px 4px; font-size: 13px; }
 
@@ -181,6 +181,7 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
 }
 .dot-item img { width: 14px; height: 14px; }
 .swatch-line { width: 18px; height: 4px; border-radius: 2px; flex: none; display: inline-block; }
+.swatch-zone { width: 14px; height: 14px; border-radius: 3px; flex: none; display: inline-block; opacity: 0.85; }
 
 .badge {
   font-size: 10.5px;
@@ -199,6 +200,8 @@ body.sidebar-hidden #sidebar { margin-left: calc(-1 * var(--sidebar-w)); }
 /* Contexte d'empilement propre : les contrôles Leaflet (z-index 1000) restent sous le panneau. */
 #map { position: absolute; inset: 0; background: #6f9a53; isolation: isolate; }
 #map.drawing, #map.drawing .leaflet-interactive { cursor: crosshair; }
+/* Chrome entoure d'un cadre le tracé SVG cliqué (focus) : inutile ici. */
+#map path.leaflet-interactive:focus { outline: none; }
 
 .crosshair {
   display: none;

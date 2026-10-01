@@ -704,7 +704,7 @@ describe('chemins', () => {
 
   test('liste vide', async () => {
     await boot();
-    expect(text('#path-list')).toBe('Aucun chemin dans cette dimension. Clic droit sur la carte ou « + Tracer un chemin ».');
+    expect(text('#path-list')).toBe('Aucun chemin ni zone dans cette dimension. Clic droit sur la carte, « + Tracer un chemin » ou « + Tracer une zone ».');
     expect($('#path-list li').className).toBe('empty');
   });
 
@@ -840,7 +840,7 @@ describe('tracé d’un chemin', () => {
     expect(app.map.getContainer().classList.contains('drawing')).toBe(true);
     expect($('#mode-banner').hidden).toBe(false);
     expect($('#mode-undo').hidden).toBe(false);
-    expect(text('#mode-text')).toBe('Tracé — 0 point(s), 0 blocs. Clic : ajouter · clic sur un lieu : s’y accrocher · double-clic / Entrée : terminer');
+    expect(text('#mode-text')).toBe('Tracé — 0 blocs · 0 points. Clic : ajouter · clic sur un lieu : s’y accrocher · double-clic / Entrée : terminer');
     // Pas d'aperçu sans point.
     app.map.fire('mousemove', { latlng: ll(5, 5) });
     expect(app.state.draw.preview.getLatLngs()).toEqual([]);
@@ -849,7 +849,7 @@ describe('tracé d’un chemin', () => {
     app.state.markers.get('a').fire('click');
     expect(app.state.draw.points).toEqual([[0, 0], [50, 50]]);
     expect(popup()).toBeNull();
-    expect(text('#mode-text')).toContain('2 point(s), 71 blocs');
+    expect(text('#mode-text')).toContain('71 blocs · 2 points');
     const vs = layers(app, (l) => l instanceof L.CircleMarker && l.options.fillColor === app.state.draw.color);
     expect(vs).toHaveLength(2);
     expect(vs[0].options).toMatchObject({ radius: 4, color: '#fff', weight: 2, fillOpacity: 1, interactive: false });
@@ -904,7 +904,7 @@ describe('tracé d’un chemin', () => {
     expect(app.state.draw.preview.options).toMatchObject({ weight: 2, dashArray: '6 6' });
     // Le chemin prolongé n'est plus dessiné à part.
     expect(pathLines(app)).toHaveLength(0);
-    expect(text('#mode-text')).toContain('Tracé (prolongement) — 2 point(s)');
+    expect(text('#mode-text')).toContain('Tracé (prolongement) — 50 blocs · 2 points');
     // Clics sur le tracé ignorés pendant le mode.
     app.map.fire('click', { latlng: ll(30, 80) });
     key('Enter');
@@ -965,7 +965,7 @@ describe('édition d’un tracé', () => {
     expect(app.state.mode).toBe('edit');
     expect(app.map.getContainer().classList.contains('editing')).toBe(true);
     expect($('#mode-undo').hidden).toBe(true);
-    expect(text('#mode-text')).toBe('Édition de « Route » — 3 points, 200 blocs. Glisser : déplacer · clic sur un segment : insérer · clic droit sur un sommet : supprimer');
+    expect(text('#mode-text')).toBe('Édition de « Route » — 200 blocs · 3 points. Glisser : déplacer · clic sur un segment : insérer · clic droit sur un sommet : supprimer');
     expect(app.state.edit.line.options.weight).toBe(6);
     expect(vertices(app)).toHaveLength(3);
     expect(vertices(app)[0].options).toMatchObject({ zIndexOffset: 1000 });
@@ -1242,7 +1242,7 @@ describe('recherche globale', () => {
     expect(results().map((li) => li.querySelector('.item-sub').textContent)).toEqual([
       'Overworld · X 10 · Z 20',
       'Nether · X 5 · Z 6',
-      'End · chemin de 300 blocs',
+      'End · chemin · 300 blocs · 3 points',
     ]);
     expect(results()[0].className).toBe('search-item active');
     expect(results()[0].getAttribute('aria-selected')).toBe('true');
@@ -1842,5 +1842,130 @@ describe('carte partagée en lecture seule (?vue=…)', () => {
     await boot();
     expect(document.body.classList.contains('readonly')).toBe(false);
     expect($('#readonly').hidden).toBe(true);
+  });
+});
+
+describe('zones (polygones)', () => {
+  const ZONE = (o) => PATH({ id: 'z', name: 'Ferme', points: [[0, 0], [100, 0], [100, 50], [0, 50]], closed: true, ...o });
+  const area = `${(5000).toLocaleString('fr-FR')} blocs² · périmètre 300 blocs · 4 points`;
+
+  test('rendu rempli, liste, popup, recherche', async () => {
+    const app = await withData({ paths: [ZONE({ dim: 'nether' }), PATH({ id: 'r', dim: 'nether' })] }, { hash: '#nether/0/0/0' });
+    const [zone, line] = pathLines(app);
+    expect(zone).toBeInstanceOf(L.Polygon);
+    expect(zone.options).toMatchObject({ fillColor: '#43a047', fillOpacity: 0.2, weight: 4 });
+    expect(line).not.toBeInstanceOf(L.Polygon);
+    const outline = layers(app, (l) => l instanceof L.Polygon && l.options.interactive === false);
+    expect(outline.map((l) => l.options.fill)).toEqual([false]);
+    expect($$('#path-list .item').map((li) => [li.firstChild.className, li.querySelector('.item-sub').textContent]))
+      .toEqual([['swatch-zone', area], ['swatch-line', '50 blocs · 2 points']]);
+    zone.fire('click', { latlng: ll(3, 4) });
+    expect(popup().querySelector('.popup-title .swatch-zone')).not.toBeNull();
+    // Pas d'équivalent Overworld pour une zone.
+    expect([...popup().querySelectorAll('.popup-sub')].map((e) => e.textContent)).toEqual([area]);
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    button('Supprimer', popup()).click();
+    expect(confirm).toHaveBeenCalledWith('Supprimer la zone « Ferme » ?');
+    input($('#global-search'), 'ferme');
+    expect(text('#search-results .item-sub')).toBe(`Nether · zone · ${area}`);
+  });
+
+  test('tracer une zone : polygone, au moins 3 points, dialogue coché', async () => {
+    const app = await boot();
+    $('#new-zone').click();
+    expect(app.state.mode).toBe('draw');
+    expect(app.state.draw.closed).toBe(true);
+    expect(app.state.draw.line).toBeInstanceOf(L.Polygon);
+    expect(text('#mode-text')).toMatch(/^Tracé de zone — 0 blocs² · périmètre/);
+    app.map.fire('click', { latlng: ll(0, 0) });
+    app.map.fire('click', { latlng: ll(100, 0) });
+    key('Enter');
+    expect(app.state.mode).toBe('draw');
+    expect(text('#toast')).toBe('Une zone doit avoir au moins 3 points.');
+    app.map.fire('click', { latlng: ll(100, 50) });
+    expect(text('#mode-text')).toContain(`${(2500).toLocaleString('fr-FR')} blocs² · périmètre 262 blocs · 3 points`);
+    key('Enter');
+    expect(app.state.mode).toBe(null);
+    expect(app.store.data.paths[0]).toMatchObject({ name: 'Zone 1', closed: true, points: [[0, 0], [100, 0], [100, 50]] });
+    expect($('#path-form').elements.closed.checked).toBe(true);
+    expect(text('#path-info')).toBe(`Overworld · zone de ${(2500).toLocaleString('fr-FR')} blocs² · périmètre 262 blocs · 3 points`);
+  });
+
+  test('commencer une zone depuis le menu de la carte ou une coordonnée recherchée', async () => {
+    const app = await boot();
+    app.map.fire('contextmenu', { latlng: ll(10, 20), originalEvent: mouse(5, 5) });
+    button('Commencer une zone ici', $('#context-menu')).click();
+    expect(app.state.draw).toMatchObject({ closed: true, points: [[10, 20]] });
+    key('Escape');
+    input($('#global-search'), '30 40');
+    submit($('#search'));
+    button('Commencer une zone', popup()).click();
+    expect(app.state.draw).toMatchObject({ closed: true, points: [[30, 40]] });
+  });
+
+  test('prolonger une zone : elle reste une zone', async () => {
+    const app = await withData({ paths: [ZONE()] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Prolonger', popup()).click();
+    expect(app.state.draw.closed).toBe(true);
+    expect(text('#mode-text')).toMatch(/^Tracé de zone \(prolongement\) — /);
+    app.map.fire('click', { latlng: ll(-20, 25) });
+    key('Enter');
+    expect(app.store.getPath('z')).toMatchObject({ closed: true, points: [[0, 0], [100, 0], [100, 50], [0, 50], [-20, 25]] });
+  });
+
+  test('éditer une zone : segment de fermeture, au moins 3 sommets', async () => {
+    const app = await withData({ paths: [ZONE()] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Éditer le tracé', popup()).click();
+    expect(app.state.edit.line).toBeInstanceOf(L.Polygon);
+    expect(text('#mode-text')).toBe(`Édition de « Ferme » — ${area}. Glisser : déplacer · clic sur un segment : insérer · clic droit sur un sommet : supprimer`);
+    // Clic près du segment de fermeture (0,50) → (0,0) : point inséré à la fin.
+    app.state.edit.line.fire('click', { latlng: ll(1, 25), originalEvent: new MouseEvent('click') });
+    expect(app.state.edit.points).toEqual([[0, 0], [100, 0], [100, 50], [0, 50], [1, 25]]);
+    vertices(app)[4].fire('contextmenu', { originalEvent: mouse() });
+    vertices(app)[3].fire('contextmenu', { originalEvent: mouse() });
+    expect(app.state.edit.points).toEqual([[0, 0], [100, 0], [100, 50]]);
+    vertices(app)[0].fire('contextmenu', { originalEvent: mouse() });
+    expect(text('#toast')).toBe('Une zone doit garder au moins 3 points.');
+    expect(app.state.edit.points).toHaveLength(3);
+    key('Enter');
+    expect(app.store.getPath('z')).toMatchObject({ closed: true, points: [[0, 0], [100, 0], [100, 50]] });
+  });
+
+  test('dialogue : case « Zone » (au moins 3 points), chemin ↔ zone', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Modifier', popup()).click();
+    const f = $('#path-form').elements;
+    expect(f.closed.checked).toBe(false);
+    change(f.closed, true);
+    expect(text('#path-info')).toBe('Au moins 3 points, un par ligne (X Z ou X Y Z).');
+    submit($('#path-form'));
+    expect($('#path-dialog').open).toBe(true);
+    input(f.points, '0 0\n30 40\n30 0');
+    expect(text('#path-info')).toBe('Overworld · zone de 600 blocs² · périmètre 120 blocs · 3 points');
+    submit($('#path-form'));
+    expect(app.store.getPath('r')).toMatchObject({ closed: true, points: [[0, 0], [30, 40], [30, 0]] });
+    expect(pathLines(app)[0]).toBeInstanceOf(L.Polygon);
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Modifier', popup()).click();
+    expect(f.closed.checked).toBe(true);
+    change(f.closed, false);
+    submit($('#path-form'));
+    expect(app.store.getPath('r')).not.toHaveProperty('closed');
+  });
+
+  test('nouvelle zone par coordonnées', async () => {
+    const app = await boot();
+    $('#new-path-coords').click();
+    const f = $('#path-form').elements;
+    expect(f.closed.checked).toBe(false);
+    change(f.closed, true);
+    input(f.points, '0 0\n100 0\n100 50\n0 50');
+    f.label.value = 'Village';
+    submit($('#path-form'));
+    expect(app.store.data.paths[0]).toMatchObject({ name: 'Village', closed: true, points: [[0, 0], [100, 0], [100, 50], [0, 50]] });
+    expect(popup().querySelector('.popup-sub').textContent).toBe(area);
   });
 });

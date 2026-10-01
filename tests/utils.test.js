@@ -169,28 +169,48 @@ describe('recherche', () => {
   });
 
   test('parsePoints : une coordonnée par ligne, Y ignoré, lignes vides permises', () => {
-    expect(U().parsePoints('0 0\n\n  10 64 -20 \r\n30,~,40\n')).toEqual({ points: [[0, 0], [10, -20], [30, 40]], error: null });
-    expect(U().parsePoints('1.5 -2.5\n3 4')).toEqual({ points: [[1, -3], [3, 4]], error: null });
+    expect(U().parsePoints('0 0\n\n  10 64 -20 \r\n30,~,40\n', 2)).toEqual({ points: [[0, 0], [10, -20], [30, 40]], error: null });
+    expect(U().parsePoints('1.5 -2.5\n3 4', 2)).toEqual({ points: [[1, -3], [3, 4]], error: null });
   });
 
   test('parsePoints : ligne illisible, numéro de ligne réel', () => {
-    expect(U().parsePoints('0 0\n\n  Base 12  \n5 5')).toEqual({
+    expect(U().parsePoints('0 0\n\n  Base 12  \n5 5', 2)).toEqual({
       points: [[0, 0]],
       error: 'Ligne 3 : « Base 12 » n\'est pas une coordonnée (X Z ou X Y Z).',
     });
-    expect(U().parsePoints('x').error).toBe('Ligne 1 : « x » n\'est pas une coordonnée (X Z ou X Y Z).');
+    expect(U().parsePoints('x', 2).error).toBe('Ligne 1 : « x » n\'est pas une coordonnée (X Z ou X Y Z).');
   });
 
-  test('parsePoints : au moins 2 points', () => {
+  test('parsePoints : nombre minimal de points', () => {
     const error = 'Au moins 2 points, un par ligne (X Z ou X Y Z).';
-    expect(U().parsePoints('')).toEqual({ points: [], error });
-    expect(U().parsePoints(' \n 1 2 \n')).toEqual({ points: [[1, 2]], error });
+    expect(U().parsePoints('', 2)).toEqual({ points: [], error });
+    expect(U().parsePoints(' \n 1 2 \n', 2)).toEqual({ points: [[1, 2]], error });
+    expect(U().parsePoints('0 0\n1 1', 3)).toEqual({ points: [[0, 0], [1, 1]], error: 'Au moins 3 points, un par ligne (X Z ou X Y Z).' });
+    expect(U().parsePoints('0 0\n1 1\n2 0', 3).error).toBeNull();
+  });
+
+  test('polygonArea : formule du lacet, sens indifférent, arrondie', () => {
+    expect(U().polygonArea([[0, 0], [10, 0], [10, 5], [0, 5]])).toBe(50);
+    expect(U().polygonArea([[0, 0], [0, 5], [10, 5], [10, 0]])).toBe(50);
+    expect(U().polygonArea([[0, 0], [3, 0], [0, 3]])).toBe(5);
+    expect(U().polygonArea([[-4, -4], [4, -4], [4, 4], [-4, 4]])).toBe(64);
+    expect(U().polygonArea([[0, 0], [5, 0], [10, 0]])).toBe(0);
+  });
+
+  test('ring : premier sommet répété à la fin', () => {
+    expect(U().ring([[1, 2], [3, 4], [5, 6]])).toEqual([[1, 2], [3, 4], [5, 6], [1, 2]]);
+  });
+
+  test('pathSummary : chemin ou zone', () => {
+    const square = [[0, 0], [100, 0], [100, 50], [0, 50]];
+    expect(U().pathSummary(square, false)).toBe('250 blocs · 4 points');
+    expect(U().pathSummary(square, true)).toBe(`${(5000).toLocaleString('fr-FR')} blocs² · périmètre 300 blocs · 4 points`);
   });
 
   test('formatPoints : une ligne « X Z » par point, relisible par parsePoints', () => {
     const points = [[0, 0], [-12, 340], [5, -6]];
     expect(U().formatPoints(points)).toBe('0 0\n-12 340\n5 -6');
-    expect(U().parsePoints(U().formatPoints(points))).toEqual({ points, error: null });
+    expect(U().parsePoints(U().formatPoints(points), 2)).toEqual({ points, error: null });
     expect(U().formatPoints([])).toBe('');
   });
 
