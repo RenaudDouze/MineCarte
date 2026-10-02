@@ -97,12 +97,23 @@ describe('nettoyage des POI', () => {
     expect(Store.CATEGORIES.map((c) => [c.id, c.emoji, c.label])).toEqual([
       ['base', '🏠', 'Base'],
       ['farm', '🌾', 'Ferme'],
-      ['portal', '🌀', 'Portail'],
-      ['village', '🏘️', 'Village'],
-      ['mine', '⛏️', 'Mine'],
       ['structure', '🏛️', 'Structure'],
-      ['resource', '💎', 'Ressource'],
+      ['village', '🏘️', 'Village'],
+      ['biome', '🌳', 'Biome'],
+      ['portal', '🌀', 'Portail'],
+      ['interesting', '⭐', 'Intéressant'],
     ]);
+  });
+
+  test('anciennes catégories Mine et Ressource : passées en « Intéressant »', () => {
+    const cat = (category) => load({ pois: [{ id: 'a', category }] }).pois[0].category;
+    expect(cat('mine')).toBe('interesting');
+    expect(cat('resource')).toBe('interesting');
+    expect(cat('biome')).toBe('biome');
+    expect(cat('toString')).toBe('');
+    expect(cat('hasOwnProperty')).toBe('');
+    const store = new Store();
+    expect(store.savePoi({ name: 'Galerie', category: 'mine' }).category).toBe('interesting');
   });
 
   test('nom limité à 100 caractères', () => {
@@ -216,8 +227,8 @@ describe('Store', () => {
   });
 
   test('POI : création, nettoyage des champs, liens symétriques', () => {
-    const a = store.savePoi({ name: '  Base  ', color: '#FFFFFF', dim: 'nether', x: '1.4', y: 'x', z: -2.6, icon: 'minecraft:bed', category: 'mine' });
-    expect(a).toEqual({ id: a.id, name: 'Base', color: '#ffffff', dim: 'nether', x: 1, y: 64, z: -3, icon: 'minecraft:bed', category: 'mine', links: [] });
+    const a = store.savePoi({ name: '  Base  ', color: '#FFFFFF', dim: 'nether', x: '1.4', y: 'x', z: -2.6, icon: 'minecraft:bed', category: 'portal' });
+    expect(a).toEqual({ id: a.id, name: 'Base', color: '#ffffff', dim: 'nether', x: 1, y: 64, z: -3, icon: 'minecraft:bed', category: 'portal', links: [] });
     expect(a.id).toMatch(/^[0-9a-z]{9,}$/);
     expect(store.getPoi(a.id)).toBe(a);
     const b = store.savePoi({ name: '   ', links: [a.id, 'inconnu'] });

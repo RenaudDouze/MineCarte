@@ -38,15 +38,20 @@
   const CATEGORIES = [
     { id: 'base', emoji: '🏠', label: 'Base' },
     { id: 'farm', emoji: '🌾', label: 'Ferme' },
-    { id: 'portal', emoji: '🌀', label: 'Portail' },
-    { id: 'village', emoji: '🏘️', label: 'Village' },
-    { id: 'mine', emoji: '⛏️', label: 'Mine' },
     { id: 'structure', emoji: '🏛️', label: 'Structure' },
-    { id: 'resource', emoji: '💎', label: 'Ressource' },
+    { id: 'village', emoji: '🏘️', label: 'Village' },
+    { id: 'biome', emoji: '🌳', label: 'Biome' },
+    { id: 'portal', emoji: '🌀', label: 'Portail' },
+    { id: 'interesting', emoji: '⭐', label: 'Intéressant' },
   ];
 
+  // Anciennes catégories (retirées) : leurs lieux passent en « Intéressant »
+  // plutôt que de perdre leur classement.
+  const LEGACY_CATEGORIES = { mine: 'interesting', resource: 'interesting' };
+
   function category(value) {
-    return CATEGORIES.some((c) => c.id === value) ? value : '';
+    const id = Object.hasOwn(LEGACY_CATEGORIES, value) ? LEGACY_CATEGORIES[value] : value;
+    return CATEGORIES.some((c) => c.id === id) ? id : '';
   }
 
   function dimension(value) {

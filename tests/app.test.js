@@ -585,22 +585,22 @@ describe('catégories', () => {
   });
 
   test('une seule catégorie utilisée : pas de filtre', async () => {
-    await withData({ pois: [POI({ id: 'a', category: 'mine' }), POI({ id: 'b', category: 'mine' })] });
+    await withData({ pois: [POI({ id: 'a', category: 'biome' }), POI({ id: 'b', category: 'biome' })] });
     expect($('#cat-filter').hidden).toBe(true);
     expect(chips()).toHaveLength(1);
   });
 
   test('catégories masquées retrouvées au démarrage', async () => {
-    const app = await withData({ pois: [POI({ id: 'a', category: 'mine' }), POI({ id: 'b' })] }, { storage: { 'minecarte:options': { hiddenCats: ['mine'] } } });
+    const app = await withData({ pois: [POI({ id: 'a', category: 'biome' }), POI({ id: 'b' })] }, { storage: { 'minecarte:options': { hiddenCats: ['biome'] } } });
     expect([...app.state.markers.keys()]).toEqual(['b']);
   });
 
   test('enregistrer un lieu dans une catégorie masquée la réaffiche', async () => {
-    const app = await withData({ pois: [POI({ id: 'a', category: 'mine' }), POI({ id: 'b' })] }, { storage: { 'minecarte:options': { hiddenCats: ['mine', 'farm'] } } });
+    const app = await withData({ pois: [POI({ id: 'a', category: 'biome' }), POI({ id: 'b' })] }, { storage: { 'minecarte:options': { hiddenCats: ['biome', 'farm'] } } });
     $('#add-poi').click();
     const f = $('#poi-form').elements;
     f.label.value = 'Galerie';
-    f.category.value = 'mine';
+    f.category.value = 'biome';
     submit($('#poi-form'));
     expect(app.state.options.hiddenCats).toEqual(['farm']);
     expect(JSON.parse(localStorage.getItem('minecarte:options')).hiddenCats).toEqual(['farm']);
