@@ -6,6 +6,7 @@ declare const Icons: any;
 declare const Store: any;
 declare const UndoStack: any;
 declare const Backups: any;
+declare const Drafts: any;
 declare const CloudSync: any;
 declare const DIMENSIONS: string[];
 interface Window {
@@ -16,6 +17,7 @@ interface Window {
   Store: any;
   UndoStack: any;
   Backups: any;
+  Drafts: any;
   CloudSync: any;
   DIMENSIONS: string[];
   MINECARTE_CONFIG: { syncUrl?: string };

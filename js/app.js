@@ -415,6 +415,27 @@
     closeSidebarOnMobile();
   }
 
+  // Petite croix discrète pour vider un champ de saisie (visible s'il n'est pas vide).
+  function addClearButton(input) {
+    const wrap = h('span', { class: 'clearable' });
+    input.replaceWith(wrap);
+    if (!input.placeholder) input.placeholder = ' ';
+    wrap.append(input, h('button', {
+      type: 'button',
+      class: 'clear-btn',
+      tabindex: '-1',
+      title: 'Effacer',
+      'aria-label': 'Effacer',
+      // Le champ garde le focus (la recherche ne se referme pas).
+      onmousedown: (e) => e.preventDefault(),
+      onclick: () => {
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+      },
+    }, '×'));
+  }
+
   function fillSwatches() {
     $$('.swatches').forEach((box) => {
       const input = /** @type {HTMLInputElement} */ (box.closest('form').elements[box.dataset.target]);
@@ -423,7 +444,10 @@
         class: 'swatch',
         style: `background:${c}`,
         title: c,
-        onclick: () => { input.value = c; },
+        onclick: () => {
+          input.value = c;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        },
       })));
     });
   }
@@ -450,25 +474,67 @@
     if (!others.length) box.append(h('p', { class: 'hint' }, 'Aucun autre lieu pour le moment.'));
   }
 
+  // --- Brouillons des dialogues ------------------------------------------------------
+  // Saisie non enregistrée gardée en cas de fermeture involontaire (Échap, clic à
+  // côté, onglet fermé) ; « Enregistrer » et « Annuler » l'oublient.
+
+  const drafts = new Drafts(localStorage);
+  const openDrafts = {}; // formulaire → { target, initial } du dernier dialogue ouvert
+
+  function startDraft(form, target, initial, fill) {
+    openDrafts[form] = { target, initial };
+    const restored = drafts.restore(form, target, initial);
+    if (restored) {
+      fill(restored);
+      toast('Saisie non enregistrée restaurée.');
+    }
+  }
+
+  function saveDraft(form, current) {
+    const { target, initial } = openDrafts[form];
+    drafts.save(form, target, initial, current);
+  }
+
+  function endDraft(form) {
+    drafts.clear(form);
+  }
+
   let poiDialogLinks = new Set();
+
+  function poiFormState() {
+    const f = $('#poi-form').elements;
+    return {
+      label: f.label.value, category: f.category.value, color: f.color.value, icon: f.icon.value,
+      dim: f.dim.value, x: f.x.value, y: f.y.value, z: f.z.value, links: [...poiDialogLinks].sort(),
+    };
+  }
+
+  function fillPoiForm(s, id) {
+    const f = $('#poi-form').elements;
+    f.label.value = s.label;
+    f.color.value = s.color;
+    f.category.value = s.category;
+    f.dim.value = s.dim;
+    f.x.value = s.x;
+    f.y.value = s.y;
+    f.z.value = s.z;
+    setPoiIcon(s.icon);
+    poiDialogLinks = new Set(s.links);
+    renderLinkPicker(poiDialogLinks, id);
+  }
+
+  const savePoiDraft = () => saveDraft('poi', poiFormState());
+
   function openPoiDialog(poi) {
     const form = $('#poi-form');
     const center = fromLatLng(map.getCenter());
     const data = Object.assign({ name: '', color: '#e53935', icon: '', category: '', dim: state.dim, x: center.x, y: 64, z: center.z, links: [] }, poi);
     $('#poi-dialog-title').textContent = data.id ? 'Modifier le lieu' : 'Nouveau lieu';
     form.elements.id.value = data.id || '';
-    form.elements.label.value = data.name;
-    form.elements.color.value = data.color;
-    form.elements.category.value = data.category;
-    form.elements.dim.value = data.dim;
-    form.elements.x.value = data.x;
-    form.elements.y.value = data.y;
-    form.elements.z.value = data.z;
-    setPoiIcon(data.icon);
     $('#icon-picker').hidden = true;
     $('#poi-link-filter').value = '';
-    poiDialogLinks = new Set(data.links);
-    renderLinkPicker(poiDialogLinks, data.id);
+    fillPoiForm({ ...data, label: data.name }, data.id);
+    startDraft('poi', data.id || 'new', poiFormState(), (s) => fillPoiForm(s, data.id));
     $('#poi-dialog').showModal();
     form.elements.label.focus();
     form.elements.label.select();
@@ -504,6 +570,7 @@
       title: `${item.readable} (${item.id})`,
       onclick: () => {
         setPoiIcon(item.id);
+        savePoiDraft();
         $('#icon-picker').hidden = true;
       },
     }, h('img', { src: Icons.url(item.id), alt: item.readable, loading: 'lazy' }))));
@@ -526,7 +593,12 @@
   });
   $('#icon-search').addEventListener('input', () => { if (Icons.isLoaded()) renderIconGrid(); });
   $('#icon-search').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
-  $('#icon-clear').addEventListener('click', () => setPoiIcon(''));
+  $('#icon-clear').addEventListener('click', () => {
+    setPoiIcon('');
+    savePoiDraft();
+  });
+  $('#poi-form').addEventListener('input', savePoiDraft);
+  $('#poi-form').addEventListener('change', savePoiDraft);
 
   function updateWeightPreview() {
     const f = $('#path-form').elements;
@@ -535,7 +607,6 @@
   }
   $('#path-form').elements.weight.addEventListener('input', updateWeightPreview);
   $('#path-form').elements.color.addEventListener('input', updateWeightPreview);
-  $('#path-form').querySelector('.swatches').addEventListener('click', () => setTimeout(updateWeightPreview));
 
   $('#poi-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -552,6 +623,7 @@
       category: f.category.value,
       links: [...poiDialogLinks],
     });
+    endDraft('poi');
     // Un lieu enregistré dans une catégorie masquée la fait réapparaître.
     if (state.options.hiddenCats.includes(poi.category)) {
       state.options.hiddenCats = state.options.hiddenCats.filter((id) => id !== poi.category);
@@ -599,15 +671,26 @@
 
   // Chemin existant, ou nouveau chemin (sans id) dont les points se saisissent
   // dans le dialogue.
+  function pathFormState() {
+    const f = $('#path-form').elements;
+    return { label: f.label.value, color: f.color.value, weight: f.weight.value, points: f.points.value, closed: f.closed.checked };
+  }
+
+  function fillPathForm(s) {
+    const f = $('#path-form').elements;
+    f.label.value = s.label;
+    f.color.value = s.color;
+    f.weight.value = s.weight;
+    f.points.value = s.points;
+    f.closed.checked = s.closed;
+  }
+
   function openPathDialog(path) {
     const form = $('#path-form');
     form.elements.id.value = path.id || '';
     form.elements.dim.value = path.dim;
-    form.elements.label.value = path.name;
-    form.elements.color.value = path.color;
-    form.elements.weight.value = path.weight;
-    form.elements.points.value = formatPoints(path.points);
-    form.elements.closed.checked = !!path.closed;
+    fillPathForm({ label: path.name, color: path.color, weight: path.weight, points: formatPoints(path.points), closed: !!path.closed });
+    startDraft('path', path.id || 'new', pathFormState(), fillPathForm);
     updateWeightPreview();
     updatePathInfo();
     $('#path-dialog').showModal();
@@ -628,6 +711,8 @@
   }
 
   $('#path-form').elements.points.addEventListener('input', updatePathInfo);
+  $('#path-form').addEventListener('input', () => saveDraft('path', pathFormState()));
+  $('#path-form').addEventListener('change', () => saveDraft('path', pathFormState()));
   $('#path-form').elements.closed.addEventListener('change', updatePathInfo);
 
   $('#path-form').addEventListener('submit', (e) => {
@@ -639,6 +724,7 @@
       return;
     }
     const path = store.getPath(f.id.value);
+    endDraft('path');
     $('#path-dialog').close();
     // Chemin supprimé entre-temps (autre appareil) : rien à enregistrer.
     if (f.id.value && !path) return;
@@ -648,8 +734,13 @@
     if (!path) focusPath(saved.id);
   });
 
+  // « Annuler » : fermeture voulue, le brouillon est oublié.
   document.querySelectorAll('dialog [data-close]').forEach((btn) => {
-    btn.addEventListener('click', () => btn.closest('dialog').close());
+    btn.addEventListener('click', () => {
+      const dialog = btn.closest('dialog');
+      endDraft(dialog.dataset.draft);
+      dialog.close();
+    });
   });
 
   // --- Modes tracé / édition ------------------------------------------------------
@@ -1393,6 +1484,7 @@
   loadIconsIfNeeded();
   window.MineCarte = { map, store, state, cloud };
   fillSwatches();
+  $$('input[type="text"]:not([readonly]), input[type="search"], textarea').forEach(addClearButton);
   if (window.innerWidth < 720) document.body.classList.add('sidebar-hidden');
 
   const initial = parseHash();

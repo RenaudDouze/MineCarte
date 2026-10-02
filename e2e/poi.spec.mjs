@@ -113,3 +113,26 @@ test('historique local : restaurer un état après rechargement', async ({ page 
   await expect(page.locator('.poi-label', { hasText: 'Premier' })).toBeVisible();
   await expect(page.locator('#toast')).toContainText('restauré');
 });
+
+test('saisie gardée après une fermeture involontaire, croix pour vider un champ', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '+ Lieu' }).click();
+  const label = page.locator('#poi-form [name="label"]');
+  await label.fill('Temple de la jungle');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#poi-dialog')).toBeHidden();
+  await page.reload();
+  await page.getByRole('button', { name: '+ Lieu' }).click();
+  await expect(label).toHaveValue('Temple de la jungle');
+  await expect(page.locator('#toast')).toHaveText('Saisie non enregistrée restaurée.');
+
+  // La croix n'apparaît que sur un champ rempli, et le vide.
+  const clear = page.locator('#poi-form .clearable:has([name="label"]) .clear-btn');
+  await expect(clear).toBeVisible();
+  await clear.click();
+  await expect(label).toHaveValue('');
+  await expect(label).toBeFocused();
+  await expect(clear).toBeHidden();
+  await page.locator('#poi-dialog').getByRole('button', { name: 'Annuler' }).click();
+  expect(await page.evaluate(() => localStorage.getItem('minecarte:drafts'))).toBeNull();
+});
