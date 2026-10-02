@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, ring, pathSummary, convert, extent, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment } = Utils;
+  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, polygonCentroid, ring, pathSummary, convert, extent, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment } = Utils;
   const OPTIONS_KEY = 'minecarte:options';
 
   // ?vue=… : carte partagée en lecture seule, gardée en mémoire (rien n'est
@@ -33,7 +33,7 @@
   // --- Utilitaires -----------------------------------------------------------
 
   function loadOptions() {
-    const defaults = { grid: true, labels: true, links: true, allDims: false, hiddenCats: [] };
+    const defaults = { grid: true, labels: true, zoneLabels: true, links: true, allDims: false, hiddenCats: [] };
     try {
       return Object.assign(defaults, JSON.parse(localStorage.getItem(OPTIONS_KEY) || '{}'));
     } catch {
@@ -260,6 +260,13 @@
       });
       line.bindTooltip(esc(path.name), { sticky: true });
       line.addTo(pathLayer);
+      if (path.closed && state.options.zoneLabels) {
+        L.marker(toLatLng(...polygonCentroid(path.points)), {
+          icon: L.divIcon({ className: 'zone-label', html: `<span>${esc(path.name)}</span>`, iconSize: null }),
+          interactive: false,
+          keyboard: false,
+        }).addTo(pathLayer);
+      }
     }
 
     renderCategoryFilter();
@@ -297,16 +304,20 @@
       poiList.append(h('li', { class: 'empty' }, query ? 'Aucun résultat.' : 'Aucun lieu. Clic droit sur la carte ou « + Lieu ».'));
     }
 
-    const paths = store.data.paths.filter((p) => p.dim === state.dim);
-    const pathList = $('#path-list');
-    pathList.replaceChildren(...paths.map((path) => h('li', { class: 'item', onclick: () => focusPath(path.id) },
+    const here = store.data.paths.filter((p) => p.dim === state.dim);
+    renderPathList($('#path-list'), here.filter((p) => !p.closed),
+      'Aucun chemin dans cette dimension. Clic droit sur la carte ou « + Tracer un chemin ».');
+    renderPathList($('#zone-list'), here.filter((p) => p.closed),
+      'Aucune zone dans cette dimension. Clic droit sur la carte ou « + Tracer une zone ».');
+  }
+
+  function renderPathList(list, paths, empty) {
+    list.replaceChildren(...paths.map((path) => h('li', { class: 'item', onclick: () => focusPath(path.id) },
       pathSwatch(path),
       h('span', { class: 'item-main' },
         h('span', { class: 'item-name' }, path.name),
         h('span', { class: 'item-sub' }, pathSummary(path.points, path.closed))))));
-    if (!paths.length) {
-      pathList.append(h('li', { class: 'empty' }, 'Aucun chemin ni zone dans cette dimension. Clic droit sur la carte, « + Tracer un chemin » ou « + Tracer une zone ».'));
-    }
+    if (!paths.length) list.append(h('li', { class: 'empty' }, empty));
   }
 
   // --- POI : popup, navigation, dialogue ------------------------------------------
@@ -609,6 +620,7 @@
   function updatePathInfo() {
     const f = $('#path-form').elements;
     const closed = f.closed.checked;
+    $('#path-title').textContent = closed ? 'Zone' : 'Chemin';
     const { points, error } = parsePoints(f.points.value, closed ? 3 : 2);
     $('#path-info').classList.toggle('error', !!error);
     $('#path-info').textContent = error || `${DIM_LABELS[f.dim.value]} · ${closed ? 'zone de ' : ''}${pathSummary(points, closed)}`;
@@ -1142,13 +1154,17 @@
     closeSidebarOnMobile();
     startDrawing({ closed: true });
   });
-  $('#new-path-coords').addEventListener('click', () => {
+  function newPathByCoords(closed) {
     cancelMode();
-    openPathDialog({ name: `Chemin ${store.data.paths.length + 1}`, color: nextPathColor(), weight: 4, dim: state.dim, points: [] });
-  });
+    openPathDialog({
+      name: `${closed ? 'Zone' : 'Chemin'} ${store.data.paths.length + 1}`, color: nextPathColor(), weight: 4, dim: state.dim, points: [], closed,
+    });
+  }
+  $('#new-path-coords').addEventListener('click', () => newPathByCoords(false));
+  $('#new-zone-coords').addEventListener('click', () => newPathByCoords(true));
 
   // Réglages
-  const optionInputs = { grid: '#opt-grid', labels: '#opt-labels', links: '#opt-links', allDims: '#poi-all-dims' };
+  const optionInputs = { grid: '#opt-grid', labels: '#opt-labels', zoneLabels: '#opt-zone-labels', links: '#opt-links', allDims: '#poi-all-dims' };
   for (const [key, sel] of Object.entries(optionInputs)) {
     const input = $(sel);
     input.checked = !!state.options[key];

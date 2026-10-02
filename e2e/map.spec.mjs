@@ -113,7 +113,7 @@ test('chemin saisi par coordonnées, puis corrigé', async ({ page }) => {
 
 test('zone : polygone tracé à la souris, aire affichée', async ({ page }) => {
   await page.goto('/#overworld/0/0/0');
-  await page.locator('.tab[data-tab="paths"]').click();
+  await page.locator('.tab[data-tab="zones"]').click();
   await page.getByRole('button', { name: '+ Tracer une zone' }).click();
   const map = page.locator('#map');
   const box = await map.boundingBox();
@@ -128,7 +128,15 @@ test('zone : polygone tracé à la souris, aire affichée', async ({ page }) => 
   await expect(page.locator('#path-form [name="closed"]')).toBeChecked();
   await page.locator('#path-form [name="label"]').fill('Champ de blé');
   await page.locator('#path-form button[type="submit"]').click();
-  await expect(page.locator('#path-list .item-name')).toHaveText(['Champ de blé']);
-  await expect(page.locator('#path-list .item-sub')).toHaveText(/^5.000 blocs² · périmètre 300 blocs · 4 points$/);
+  await expect(page.locator('#zone-list .item-name')).toHaveText(['Champ de blé']);
+  await expect(page.locator('#zone-list .item-sub')).toHaveText(/^5.000 blocs² · périmètre 300 blocs · 4 points$/);
   await expect(page.locator('#map path.leaflet-interactive[fill-opacity="0.2"]')).toHaveCount(1);
+  // Nom de la zone affiché sur la carte, au centre ; masquable dans les réglages.
+  await expect(page.locator('.zone-label')).toHaveText('Champ de blé');
+  await expect(page.locator('.zone-label span')).toBeInViewport();
+  await page.locator('.tab[data-tab="paths"]').click();
+  await expect(page.locator('#path-list .empty')).toBeVisible();
+  await page.locator('.tab[data-tab="settings"]').click();
+  await page.getByLabel('Noms des zones').uncheck();
+  await expect(page.locator('.zone-label')).toHaveCount(0);
 });

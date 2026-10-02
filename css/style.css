@@ -281,6 +281,18 @@ body.touch .crosshair { display: block; }
   pointer-events: none;
 }
 #map.hide-labels .poi-label { display: none; }
+/* Nom d'une zone, centré sur son centre de gravité. */
+.zone-label { pointer-events: none; }
+.zone-label span {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  color: #fff;
+  text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 2px #000;
+}
 .poi-pin-item {
   left: -14px;
   top: -14px;
