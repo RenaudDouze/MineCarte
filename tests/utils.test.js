@@ -197,6 +197,19 @@ describe('recherche', () => {
     expect(U().polygonArea([[0, 0], [5, 0], [10, 0]])).toBe(0);
   });
 
+  test('polygonCentroid : centre de gravité, sens indifférent', () => {
+    expect(U().polygonCentroid([[10, 20], [30, 20], [30, 60], [10, 60]])).toEqual([20, 40]);
+    expect(U().polygonCentroid([[10, 60], [30, 60], [30, 20], [10, 20]])).toEqual([20, 40]);
+    expect(U().polygonCentroid([[0, 0], [6, 0], [0, 3]])).toEqual([2, 1]);
+    // En L : le centre de gravité n'est pas la moyenne des sommets.
+    expect(U().polygonCentroid([[0, 0], [20, 0], [20, 10], [10, 10], [10, 30], [0, 30]])).toEqual([7.5, 12.5]);
+  });
+
+  test('polygonCentroid : points alignés, moyenne des sommets', () => {
+    expect(U().polygonCentroid([[0, 2], [4, 2], [11, 2]])).toEqual([5, 2]);
+    expect(U().polygonCentroid([[1, 0], [1, 6], [1, 9]])).toEqual([1, 5]);
+  });
+
   test('ring : premier sommet répété à la fin', () => {
     expect(U().ring([[1, 2], [3, 4], [5, 6]])).toEqual([[1, 2], [3, 4], [5, 6], [1, 2]]);
   });

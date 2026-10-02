@@ -88,9 +88,9 @@ describe('démarrage et options', () => {
     expect(layers(app, (l) => l instanceof Terrain.GridOverlay)).toHaveLength(0);
     expect(app.map.getContainer().classList.contains('hide-labels')).toBe(true);
     app = await boot({ storage: { 'minecarte:options': '{pas du json' } });
-    expect(app.state.options).toEqual({ grid: true, labels: true, links: true, allDims: false, hiddenCats: [] });
+    expect(app.state.options).toEqual({ grid: true, labels: true, zoneLabels: true, links: true, allDims: false, hiddenCats: [] });
     app = await boot({ storage: { 'minecarte:options': { labels: false } } });
-    expect(app.state.options).toEqual({ grid: true, labels: false, links: true, allDims: false, hiddenCats: [] });
+    expect(app.state.options).toEqual({ grid: true, labels: false, zoneLabels: true, links: true, allDims: false, hiddenCats: [] });
   });
 
   test('changer une option : enregistrée et appliquée', async () => {
@@ -704,8 +704,10 @@ describe('chemins', () => {
 
   test('liste vide', async () => {
     await boot();
-    expect(text('#path-list')).toBe('Aucun chemin ni zone dans cette dimension. Clic droit sur la carte, « + Tracer un chemin » ou « + Tracer une zone ».');
+    expect(text('#path-list')).toBe('Aucun chemin dans cette dimension. Clic droit sur la carte ou « + Tracer un chemin ».');
     expect($('#path-list li').className).toBe('empty');
+    expect(text('#zone-list')).toBe('Aucune zone dans cette dimension. Clic droit sur la carte ou « + Tracer une zone ».');
+    expect($('#zone-list li').className).toBe('empty');
   });
 
   test('popup : longueur, équivalent Overworld dans le Nether, actions', async () => {
@@ -1857,8 +1859,13 @@ describe('zones (polygones)', () => {
     expect(line).not.toBeInstanceOf(L.Polygon);
     const outline = layers(app, (l) => l instanceof L.Polygon && l.options.interactive === false);
     expect(outline.map((l) => l.options.fill)).toEqual([false]);
-    expect($$('#path-list .item').map((li) => [li.firstChild.className, li.querySelector('.item-sub').textContent]))
-      .toEqual([['swatch-zone', area], ['swatch-line', '50 blocs · 2 points']]);
+    // Chemins et zones dans deux onglets distincts.
+    const items = (sel) => $$(`${sel} .item`).map((li) => [li.firstChild.className, li.querySelector('.item-name').textContent, li.querySelector('.item-sub').textContent]);
+    expect(items('#path-list')).toEqual([['swatch-line', 'Route', '50 blocs · 2 points']]);
+    expect(items('#zone-list')).toEqual([['swatch-zone', 'Ferme', area]]);
+    $$('#zone-list .item')[0].click();
+    expect(popup().querySelector('.popup-title').textContent).toBe('Ferme');
+    app.map.closePopup();
     zone.fire('click', { latlng: ll(3, 4) });
     expect(popup().querySelector('.popup-title .swatch-zone')).not.toBeNull();
     // Pas d'équivalent Overworld pour une zone.
@@ -1868,6 +1875,50 @@ describe('zones (polygones)', () => {
     expect(confirm).toHaveBeenCalledWith('Supprimer la zone « Ferme » ?');
     input($('#global-search'), 'ferme');
     expect(text('#search-results .item-sub')).toBe(`Nether · zone · ${area}`);
+  });
+
+  test('nom des zones sur la carte, au centre de gravité ; option « Noms des zones »', async () => {
+    const L_SHAPE = [[0, 0], [20, 0], [20, 10], [10, 10], [10, 30], [0, 30]];
+    const app = await withData({ paths: [ZONE({ name: '<b>Ferme</b>', points: L_SHAPE }), PATH({ id: 'r' }), ZONE({ id: 'n', dim: 'nether' })] });
+    const labels = () => layers(app, (l) => l instanceof L.Marker && l.options.icon.options.className === 'zone-label');
+    expect(labels()).toHaveLength(1);
+    const [label] = labels();
+    expect(label.getLatLng()).toEqual(ll(7.5, 12.5));
+    expect(label.options).toMatchObject({ interactive: false, keyboard: false });
+    expect(label.options.icon.options).toMatchObject({ html: '<span>&lt;b&gt;Ferme&lt;/b&gt;</span>', iconSize: null });
+    expect($('#opt-zone-labels').checked).toBe(true);
+    change($('#opt-zone-labels'), false);
+    expect(JSON.parse(localStorage.getItem('minecarte:options')).zoneLabels).toBe(false);
+    expect(labels()).toHaveLength(0);
+    expect(pathLines(app)).toHaveLength(2);
+    change($('#opt-zone-labels'), true);
+    expect(labels()).toHaveLength(1);
+    // Pendant l'édition, ni la zone ni son nom ne sont dessinés en double.
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Éditer le tracé', popup()).click();
+    expect(labels()).toHaveLength(0);
+  });
+
+  test('nom des zones masqué si l’option est enregistrée à non', async () => {
+    const app = await withData({ paths: [ZONE()] }, { storage: { 'minecarte:options': { zoneLabels: false } } });
+    expect($('#opt-zone-labels').checked).toBe(false);
+    expect(layers(app, (l) => l instanceof L.Marker && l.options.icon.options.className === 'zone-label')).toHaveLength(0);
+  });
+
+  test('titre du dialogue : « Chemin » ou « Zone » selon la case', async () => {
+    await boot();
+    $('#new-zone-coords').click();
+    const f = $('#path-form').elements;
+    expect(text('#path-title')).toBe('Zone');
+    expect(f.closed.checked).toBe(true);
+    expect(f.label.value).toBe('Zone 1');
+    change(f.closed, false);
+    expect(text('#path-title')).toBe('Chemin');
+    $('#path-dialog').close();
+    $('#new-path-coords').click();
+    expect(text('#path-title')).toBe('Chemin');
+    expect(f.closed.checked).toBe(false);
+    expect(f.label.value).toBe('Chemin 1');
   });
 
   test('tracer une zone : polygone, au moins 3 points, dialogue coché', async () => {

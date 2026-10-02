@@ -63,6 +63,25 @@
     return Math.round(Math.abs(twice) / 2);
   }
 
+  // Centre de gravité d'un polygone (où afficher le nom d'une zone) ; pour un
+  // polygone sans aire (points alignés), moyenne des sommets.
+  function polygonCentroid(points) {
+    let twice = 0;
+    let cx = 0;
+    let cz = 0;
+    points.forEach(([x1, z1], i) => {
+      const [x2, z2] = points[(i + 1) % points.length];
+      const cross = x1 * z2 - x2 * z1;
+      twice += cross;
+      cx += (x1 + x2) * cross;
+      cz += (z1 + z2) * cross;
+    });
+    if (twice === 0) {
+      return [0, 1].map((k) => points.reduce((sum, p) => sum + p[k], 0) / points.length);
+    }
+    return [cx / (3 * twice), cz / (3 * twice)];
+  }
+
   // Sommets d'une zone avec le premier répété à la fin (segment de fermeture).
   function ring(points) {
     return [...points, points[0]];
@@ -170,5 +189,5 @@
     return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   }
 
-  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, polygonArea, ring, pathSummary, convert, extent, normalize, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment, segmentDistance };
+  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, polygonArea, polygonCentroid, ring, pathSummary, convert, extent, normalize, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment, segmentDistance };
 })(window);
