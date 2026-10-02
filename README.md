@@ -26,8 +26,9 @@ python3 -m http.server 8000
 - **Lieux** : ajout (bouton « + Lieu » ou clic droit sur la carte), modification et suppression.
   Chaque lieu a un nom, une couleur, une dimension et des coordonnées X, Y, Z. Seuls X et Z
   servent au placement, Y est affiché pour information.
-- **Catégories** : un lieu peut être classé (Base, Ferme, Portail, Village, Mine, Structure,
-  Ressource). Des pastilles au-dessus de la liste masquent ou affichent chaque catégorie, sur la
+- **Catégories** : un lieu peut être classé (Base, Ferme, Structure, Village, Biome, Portail,
+  Intéressant ; les anciennes catégories Mine et Ressource deviennent « Intéressant »). Des
+  pastilles au-dessus de la liste masquent ou affichent chaque catégorie, sur la
   carte comme dans la liste (réglage gardé dans le navigateur).
 - **Icônes d'items** : un lieu peut afficher l'icône d'un item Minecraft (recherche en anglais
   parmi ~1 650 items). Les textures, propriété de Mojang, ne sont pas incluses dans le dépôt :
