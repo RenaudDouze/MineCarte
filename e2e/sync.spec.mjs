@@ -8,21 +8,21 @@ test('synchronisation par code entre deux appareils', async ({ page, otherPage }
   await page.getByRole('button', { name: '+ Lieu' }).click();
   await page.locator('#poi-form [name="label"]').fill('Village');
   await page.locator('#poi-form button[type="submit"]').click();
-  await page.locator('.tab[data-tab="settings"]').click();
+  await page.locator('#settings-btn').click();
   await page.locator('#sync-create').click();
   await expect(page.locator('#sync-status')).toHaveText(/Synchronisé/);
   const code = await page.locator('#sync-code').textContent();
   expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 
   await otherPage.goto('/');
-  await otherPage.locator('.tab[data-tab="settings"]').click();
+  await otherPage.locator('#settings-btn').click();
   await otherPage.locator('#sync-join [name="code"]').fill(code);
   await otherPage.locator('#sync-join button[type="submit"]').click();
   await expect(otherPage.locator('#toast')).toHaveText(`Appareil relié au code ${code}.`);
   await expect(otherPage.locator('#poi-list .item-name')).toHaveText(['Village']);
 
   // Modification sur le second appareil, reçue par le premier.
-  await otherPage.locator('.tab[data-tab="pois"]').click();
+  await otherPage.locator('#settings-close').click();
   await otherPage.getByRole('button', { name: '+ Lieu' }).click();
   await otherPage.locator('#poi-form [name="label"]').fill('Ferme');
   await otherPage.locator('#poi-form button[type="submit"]').click();
@@ -39,7 +39,7 @@ test('lien en lecture seule : consultation sans modification, puis révocation',
   await page.getByRole('button', { name: '+ Lieu' }).click();
   await page.locator('#poi-form [name="label"]').fill('Village');
   await page.locator('#poi-form button[type="submit"]').click();
-  await page.locator('.tab[data-tab="settings"]').click();
+  await page.locator('#settings-btn').click();
   await page.locator('#sync-create').click();
   await expect(page.locator('#sync-status')).toHaveText(/Synchronisé/);
   await page.locator('#share-create').click();
@@ -59,7 +59,7 @@ test('lien en lecture seule : consultation sans modification, puis révocation',
   expect(await otherPage.evaluate(() => localStorage.getItem('minecarte:data'))).toBeNull();
 
   // Les modifications du propriétaire apparaissent chez la personne qui consulte.
-  await page.locator('.tab[data-tab="pois"]').click();
+  await page.locator('#settings-close').click();
   await page.getByRole('button', { name: '+ Lieu' }).click();
   await page.locator('#poi-form [name="label"]').fill('Ferme');
   await page.locator('#poi-form button[type="submit"]').click();
@@ -68,7 +68,7 @@ test('lien en lecture seule : consultation sans modification, puis révocation',
   await expect(otherPage.locator('#poi-list .item-name')).toHaveText(['Ferme', 'Village']);
 
   page.on('dialog', (d) => d.accept());
-  await page.locator('.tab[data-tab="settings"]').click();
+  await page.locator('#settings-btn').click();
   await page.locator('#share-revoke').click();
   await expect(page.locator('#toast')).toHaveText('Lien révoqué.');
   await otherPage.reload();
