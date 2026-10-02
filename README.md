@@ -70,6 +70,10 @@ python3 -m http.server 8000
   long sur la carte ouvre le menu (ajouter un lieu, commencer un chemin…). Au doigt, une mire
   marque le centre de la carte, dont les coordonnées s'affichent en bas, et « + Lieu » y place le
   nouveau lieu. Boutons et listes sont agrandis sur les écrans tactiles.
+- **Saisie protégée** : ce qui est tapé dans le dialogue d'un lieu, d'un chemin ou d'une zone est
+  gardé dans le navigateur tant qu'il n'est pas enregistré. Après une fermeture involontaire
+  (`Échap`, clic à côté, onglet fermé), rouvrir le même élément (ou un nouvel élément) retrouve la
+  saisie ; « Annuler » l'oublie. Une petite croix vide un champ de texte d'un clic.
 - **URL partageable** (`#dimension/x/z/zoom`).
 - **Sauvegarde** automatique dans le navigateur (localStorage), **export et import JSON**.
 - **Synchronisation cloud par code** (Réglages) : « Créer un code » sur un appareil, puis
@@ -92,6 +96,7 @@ python3 -m http.server 8000
 | `js/icons.js` | Chargement et recherche des icônes d'items |
 | `js/undo.js` | Annuler / rétablir (piles d'instantanés) |
 | `js/backups.js` | Historique local (copies automatiques dans le navigateur) |
+| `js/drafts.js` | Brouillons des dialogues (saisie gardée en cas de fermeture) |
 | `js/sync.js` | Synchronisation cloud par code (fusion, envoi, réception) |
 | `js/config.js` | Configuration (URL du worker, régénérée au déploiement) |
 | `worker/` | Worker Cloudflare de synchronisation |

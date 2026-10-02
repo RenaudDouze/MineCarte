@@ -152,7 +152,7 @@
 
   <div id="context-menu" class="context-menu" hidden></div>
 
-  <dialog id="poi-dialog">
+  <dialog id="poi-dialog" data-draft="poi">
     <form id="poi-form" method="dialog" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
       <h2 id="poi-dialog-title">Nouveau lieu</h2>
       <input type="hidden" name="id">
@@ -202,7 +202,7 @@
     </form>
   </dialog>
 
-  <dialog id="path-dialog">
+  <dialog id="path-dialog" data-draft="path">
     <form id="path-form" method="dialog" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
       <h2 id="path-title">Chemin</h2>
       <input type="hidden" name="id">
@@ -244,6 +244,7 @@
   <script src="js/sync.js"></script>
   <script src="js/undo.js"></script>
   <script src="js/backups.js"></script>
+  <script src="js/drafts.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

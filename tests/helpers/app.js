@@ -13,7 +13,7 @@ const html = readFileSync(join(import.meta.dirname, '../../index.html'), 'utf8')
 const page = new DOMParser().parseFromString(html, 'text/html');
 page.querySelectorAll('script').forEach((el) => el.remove());
 const body = page.body.innerHTML;
-const MODULES = ['utils', 'noise', 'terrain', 'config', 'icons', 'store', 'sync', 'undo', 'backups'];
+const MODULES = ['utils', 'noise', 'terrain', 'config', 'icons', 'store', 'sync', 'undo', 'backups', 'drafts'];
 
 let cleanups = [];
 

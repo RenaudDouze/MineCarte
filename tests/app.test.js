@@ -2020,3 +2020,154 @@ describe('zones (polygones)', () => {
     expect(popup().querySelector('.popup-sub').textContent).toBe(area);
   });
 });
+
+describe('brouillons des dialogues', () => {
+  const draftsStored = () => JSON.parse(localStorage.getItem('minecarte:drafts'));
+
+  test('nouveau lieu : saisie gardée après Échap ou rechargement, coordonnées du moment', async () => {
+    let app = await boot();
+    $('#add-poi').click();
+    const f = $('#poi-form').elements;
+    input(f.label, 'Base secrète');
+    change(f.category, 'base');
+    expect(draftsStored()).toEqual({ poi: { target: 'new', changes: { label: 'Base secrète', category: 'base' } } });
+    $('#poi-dialog').close(); // Échap ou clic à côté
+    // Rechargement : le brouillon est relu au prochain dialogue.
+    const saved = localStorage.getItem('minecarte:drafts');
+    app = await boot({ storage: { 'minecarte:drafts': saved } });
+    app.map.setView(L.latLng(40, 300), 0, { animate: false });
+    $('#add-poi').click();
+    const g = $('#poi-form').elements;
+    expect([g.label.value, g.category.value, g.x.value, g.z.value]).toEqual(['Base secrète', 'base', '300', '-40']);
+    expect(text('#toast')).toBe('Saisie non enregistrée restaurée.');
+    submit($('#poi-form'));
+    expect(app.store.data.pois[0]).toMatchObject({ name: 'Base secrète', category: 'base', x: 300, z: -40 });
+    expect(localStorage.getItem('minecarte:drafts')).toBeNull();
+  });
+
+  test('lieu existant : brouillon propre à ce lieu, icône, couleur et liens compris', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'Alpha' }), POI({ id: 'b', name: 'Beta' })] });
+    vi.stubGlobal('fetch', iconFetch());
+    app.state.markers.get('a').fire('click');
+    button('Modifier', popup()).click();
+    const f = $('#poi-form').elements;
+    $$('#poi-form .swatch')[3].click();
+    $('#poi-links input').click();
+    $('#icon-choose').click();
+    await until(() => $('#icon-grid .icon-cell'));
+    $('#icon-grid .icon-cell').click();
+    expect(draftsStored().poi).toEqual({
+      target: 'a',
+      changes: { color: Utils.SWATCHES[3], icon: 'minecraft:diamond', links: ['b'] },
+    });
+    $('#icon-clear').click();
+    expect(draftsStored().poi.changes).toEqual({ color: Utils.SWATCHES[3], links: ['b'] });
+    $('#poi-dialog').close();
+    // Un autre lieu ne reprend pas ce brouillon.
+    app.state.markers.get('b').fire('click');
+    button('Modifier', popup()).click();
+    expect(f.color.value).toBe('#e53935');
+    $('#poi-dialog').close();
+    app.state.markers.get('a').fire('click');
+    button('Modifier', popup()).click();
+    expect(f.color.value).toBe(Utils.SWATCHES[3]);
+    expect($$('#poi-links input:checked').map((c) => c.value)).toEqual(['b']);
+    // Revenir aux valeurs d'origine efface le brouillon.
+    input(f.color, '#e53935');
+    $('#poi-links input').click();
+    expect(localStorage.getItem('minecarte:drafts')).toBeNull();
+  });
+
+  test('« Annuler » oublie le brouillon', async () => {
+    await boot();
+    $('#add-poi').click();
+    input($('#poi-form').elements.label, 'Brouillon');
+    button('Annuler', $('#poi-dialog')).click();
+    expect($('#poi-dialog').open).toBe(false);
+    expect(localStorage.getItem('minecarte:drafts')).toBeNull();
+    $('#add-poi').click();
+    expect($('#poi-form').elements.label.value).toBe('');
+  });
+
+  test('chemin : points et nom gardés, oubliés à l’enregistrement ; pas si la saisie est fausse', async () => {
+    const app = await boot();
+    $('#new-path-coords').click();
+    const f = $('#path-form').elements;
+    input(f.points, '0 0\nici');
+    change(f.closed, true);
+    expect(draftsStored().path).toEqual({ target: 'new', changes: { points: '0 0\nici', closed: true } });
+    $('#path-dialog').close();
+    $('#new-path-coords').click();
+    expect([f.points.value, f.closed.checked, text('#path-title')]).toEqual(['0 0\nici', true, 'Zone']);
+    expect(text('#toast')).toBe('Saisie non enregistrée restaurée.');
+    submit($('#path-form'));
+    expect($('#path-dialog').open).toBe(true);
+    expect(draftsStored().path).toBeDefined();
+    input(f.points, '0 0\n10 0\n10 10');
+    $$('#path-form .swatch')[3].click();
+    expect(draftsStored().path.changes.color).toBe(Utils.SWATCHES[3]);
+    submit($('#path-form'));
+    expect(app.store.data.paths[0]).toMatchObject({ closed: true, color: Utils.SWATCHES[3] });
+    expect(localStorage.getItem('minecarte:drafts')).toBeNull();
+  });
+
+  test('chemin existant : brouillon rattaché à ce chemin, « Annuler » l’oublie', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Modifier', popup()).click();
+    const f = $('#path-form').elements;
+    input(f.label, 'Autoroute');
+    input(f.weight, '9');
+    expect(draftsStored().path).toEqual({ target: 'r', changes: { label: 'Autoroute', weight: '9' } });
+    $('#path-dialog').close();
+    $('#new-path-coords').click();
+    expect(f.label.value).toBe('Chemin 2');
+    $('#path-dialog').close();
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Modifier', popup()).click();
+    expect([f.label.value, f.weight.value, text('#weight-value')]).toEqual(['Autoroute', '9', '9 px']);
+    button('Annuler', $('#path-dialog')).click();
+    expect(localStorage.getItem('minecarte:drafts')).toBeNull();
+  });
+});
+
+describe('croix d’effacement des champs', () => {
+  test('sur les champs de texte, de recherche et les zones de texte, pas sur les autres', async () => {
+    await boot();
+    const clearable = (sel) => $(sel).parentElement.classList.contains('clearable');
+    for (const sel of ['#global-search', '#poi-search', '#poi-form [name="label"]', '#icon-search', '#poi-link-filter', '#path-form [name="label"]', '#path-form [name="points"]', '#sync-join [name="code"]']) {
+      expect([sel, clearable(sel)]).toEqual([sel, true]);
+    }
+    for (const sel of ['#poi-form [name="x"]', '#poi-form [name="color"]', '#share-url', '#path-form [name="weight"]']) {
+      expect([sel, clearable(sel)]).toEqual([sel, false]);
+    }
+    const btn = $('#poi-search').nextElementSibling;
+    expect(btn.outerHTML).toBe('<button type="button" class="clear-btn" tabindex="-1" title="Effacer" aria-label="Effacer">×</button>');
+    // Un espace pour que :placeholder-shown masque la croix sur un champ vide ; placeholder existant gardé.
+    expect($('#poi-form [name="label"]').placeholder).toBe(' ');
+    expect($('#poi-search').placeholder).toBe('Rechercher…');
+  });
+
+  test('vider un champ : valeur effacée, événement input, focus gardé', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'Alpha' }), POI({ id: 'b', name: 'Beta' })] });
+    const search = $('#global-search');
+    input(search, 'alp');
+    expect($$('#search-results .item-name').map((e) => e.textContent)).toEqual(['Alpha']);
+    const btn = search.nextElementSibling;
+    const down = new MouseEvent('mousedown', { cancelable: true, bubbles: true });
+    btn.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+    btn.click();
+    expect(search.value).toBe('');
+    expect(document.activeElement).toBe(search);
+    expect($('#search-results').hidden).toBe(true);
+    // Dans un dialogue, le brouillon suit.
+    $('#add-poi').click();
+    const label = $('#poi-form').elements.label;
+    input(label, 'X');
+    label.nextElementSibling.click();
+    expect(label.value).toBe('');
+    expect(localStorage.getItem('minecarte:drafts')).toBeNull();
+    expect(app.store.data.pois).toHaveLength(2);
+  });
+});
