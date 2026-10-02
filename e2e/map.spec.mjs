@@ -44,7 +44,7 @@ test('export puis import JSON', async ({ page }) => {
   await page.locator('#poi-form [name="label"]').fill('À exporter');
   await page.locator('#poi-form button[type="submit"]').click();
 
-  await page.locator('.tab[data-tab="settings"]').click();
+  await page.locator('#settings-btn').click();
   const download = page.waitForEvent('download');
   await page.locator('#export').click();
   const file = await (await download).path();
@@ -136,7 +136,7 @@ test('zone : polygone tracé à la souris, aire affichée', async ({ page }) => 
   await expect(page.locator('.zone-label span')).toBeInViewport();
   await page.locator('.tab[data-tab="paths"]').click();
   await expect(page.locator('#path-list .empty')).toBeVisible();
-  await page.locator('.tab[data-tab="settings"]').click();
+  await page.locator('#settings-btn').click();
   await page.getByLabel('Noms des zones').uncheck();
   await expect(page.locator('.zone-label')).toHaveCount(0);
 });

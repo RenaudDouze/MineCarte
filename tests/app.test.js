@@ -1465,6 +1465,21 @@ describe('tout afficher', () => {
   });
 });
 
+describe('réglages', () => {
+  test('fenêtre à part, ouverte par ⚙ et fermée par ×, hors des onglets', async () => {
+    await boot();
+    expect($$('.tab').map((t) => t.dataset.tab)).toEqual(['pois', 'paths', 'zones']);
+    expect($('#sidebar #opt-grid')).toBeNull();
+    expect($('#settings-dialog #opt-grid')).not.toBeNull();
+    expect($('#settings-dialog').open).toBe(false);
+    $('#settings-btn').click();
+    expect($('#settings-dialog').open).toBe(true);
+    expect(text('#settings-title')).toBe('Réglages');
+    $('#settings-close').click();
+    expect($('#settings-dialog').open).toBe(false);
+  });
+});
+
 describe('panneau latéral', () => {
   test('masquer / afficher, onglets', async () => {
     const app = await boot();
@@ -1746,11 +1761,9 @@ describe('synchronisation cloud', () => {
     const pull = vi.spyOn(app.cloud, 'pull');
     $('#sync-now').click();
     expect(pull).toHaveBeenCalled();
-    document.body.classList.add('sidebar-hidden');
     const scroll = vi.spyOn($('#sync-section'), 'scrollIntoView');
     $('#sync-badge').click();
-    expect(document.body.classList.contains('sidebar-hidden')).toBe(false);
-    expect($('.tab[data-tab="settings"]').classList.contains('active')).toBe(true);
+    expect($('#settings-dialog').open).toBe(true);
     expect(scroll).toHaveBeenCalledWith({ block: 'nearest' });
     vi.stubGlobal('confirm', vi.fn(() => false));
     $('#sync-leave').click();

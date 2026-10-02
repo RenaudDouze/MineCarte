@@ -60,6 +60,8 @@ python3 -m http.server 8000
 - **Annuler / rétablir** : boutons ↶ ↷ en haut, ou `Ctrl+Z` / `Ctrl+Y` (`Ctrl+Maj+Z`), pour les 50
   dernières modifications (y compris « Tout effacer » et un import). Une modification reçue d'un
   autre appareil vide l'historique, pour ne jamais défaire le travail des autres.
+- **Réglages** (bouton ⚙ en haut, dans une fenêtre à part) : affichage, synchronisation, données,
+  historique local et aide.
 - **Historique local** (Réglages) : une copie des données est faite automatiquement dans le
   navigateur (au plus toutes les 10 minutes, et toujours avant un import, un « Tout effacer » ou
   une restauration). Les 10 dernières sont listées avec leur date et leur contenu ; « Restaurer »

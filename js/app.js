@@ -1336,13 +1336,13 @@
     badge.title = `Synchronisation cloud (${CloudSync.formatCode(cloud.code)}) : ${text}`;
   }
 
-  function showSettings() {
-    setSidebar(true);
-    $('.tab[data-tab="settings"]').click();
+  // Réglages : fenêtre à part, ouverte par ⚙ (ou par le badge de synchronisation).
+  $('#settings-btn').addEventListener('click', () => $('#settings-dialog').showModal());
+  $('#settings-close').addEventListener('click', () => $('#settings-dialog').close());
+  $('#sync-badge').addEventListener('click', () => {
+    $('#settings-dialog').showModal();
     $('#sync-section').scrollIntoView({ block: 'nearest' });
-  }
-
-  $('#sync-badge').addEventListener('click', showSettings);
+  });
 
   $('#sync-create').addEventListener('click', async () => {
     try {
