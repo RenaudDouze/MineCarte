@@ -561,7 +561,7 @@ describe('catégories', () => {
     expect($('#cat-filter').hidden).toBe(false);
     expect(chips().map((c) => c.textContent)).toEqual(['Sans catégorie (1)', '🏠 Base (1)', '🌾 Ferme (2)']);
     expect(chips().every((c) => c.getAttribute('aria-pressed') === 'true')).toBe(true);
-    expect(chips()[2].title).toBe('Masquer cette catégorie');
+    expect(chips()[2].title).toBe("Masquer cette catégorie (Ctrl+clic : n'afficher qu'elle)");
     expect(layers(app, (l) => l instanceof L.Polyline && l.options.pane === 'linkPane')).toHaveLength(1);
 
     chips()[2].click();
@@ -574,7 +574,7 @@ describe('catégories', () => {
     const off = chips()[2];
     expect(off.className).toBe('cat-chip off');
     expect(off.getAttribute('aria-pressed')).toBe('false');
-    expect(off.title).toBe('Afficher cette catégorie');
+    expect(off.title).toBe("Afficher cette catégorie (Ctrl+clic : n'afficher qu'elle)");
 
     chips()[0].click();
     expect(app.state.options.hiddenCats).toEqual(['farm', '']);
@@ -582,6 +582,22 @@ describe('catégories', () => {
     chips()[2].click();
     expect(app.state.options.hiddenCats).toEqual(['']);
     expect(names()).toEqual(['Blé', 'Carotte', 'Maison']);
+  });
+
+  test('Ctrl+clic (ou Cmd+clic) : n’afficher que cette catégorie, puis tout', async () => {
+    const app = await withData({ pois: [
+      POI({ id: 'a', name: 'Maison', category: 'base' }),
+      POI({ id: 'b', name: 'Blé', category: 'farm' }),
+      POI({ id: 'd', name: 'Divers' }),
+    ] }, { storage: { 'minecarte:options': { hiddenCats: ['portal'] } } });
+    const ctrl = (chip, mod) => chip.dispatchEvent(new MouseEvent('click', { bubbles: true, [mod]: true }));
+    ctrl(chips()[2], 'ctrlKey');
+    expect(app.state.options.hiddenCats).toEqual(['portal', '', 'base']);
+    expect(names()).toEqual(['Blé']);
+    expect(JSON.parse(localStorage.getItem('minecarte:options')).hiddenCats).toEqual(['portal', '', 'base']);
+    ctrl(chips()[2], 'metaKey');
+    expect(app.state.options.hiddenCats).toEqual(['portal']);
+    expect(names()).toEqual(['Blé', 'Divers', 'Maison']);
   });
 
   test('une seule catégorie utilisée : pas de filtre', async () => {

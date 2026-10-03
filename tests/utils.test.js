@@ -227,6 +227,25 @@ describe('recherche', () => {
     expect(U().formatPoints([])).toBe('');
   });
 
+  test('toggleCategory : clic simple, masque ou réaffiche', () => {
+    const ids = ['base', 'farm', ''];
+    expect(U().toggleCategory([], ids, 'farm', false)).toEqual(['farm']);
+    expect(U().toggleCategory(['portal', 'farm'], ids, 'farm', false)).toEqual(['portal']);
+    expect(U().toggleCategory(['base'], ids, '', false)).toEqual(['base', '']);
+  });
+
+  test('toggleCategory : Ctrl+clic, seule cette catégorie, puis tout', () => {
+    const ids = ['base', 'farm', ''];
+    // Catégorie sans pastille (aucun lieu) gardée telle quelle.
+    expect(U().toggleCategory(['portal'], ids, 'farm', true)).toEqual(['portal', 'base', '']);
+    expect(U().toggleCategory(['portal', 'base', ''], ids, 'farm', true)).toEqual(['portal']);
+    // Catégorie masquée : elle devient la seule visible.
+    expect(U().toggleCategory(['farm'], ids, 'farm', true)).toEqual(['base', '']);
+    // Pas encore seule : une autre est encore visible.
+    expect(U().toggleCategory(['base'], ids, 'farm', true)).toEqual(['base', '']);
+    expect(U().toggleCategory(['', 'base'], ids, '', true)).toEqual(['base', 'farm']);
+  });
+
   const pois = [
     { name: 'Village des plaines' }, { name: 'Élevage' }, { name: 'Base' }, { name: 'Grande base' }, { name: 'Mine' },
   ];

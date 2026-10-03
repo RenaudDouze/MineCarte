@@ -138,6 +138,18 @@
     return points.map(([x, z]) => `${x} ${z}`).join('\n');
   }
 
+  // Catégories masquées après un clic sur la pastille `id` (parmi `ids`, les
+  // pastilles affichées). Clic simple : masque ou réaffiche cette catégorie.
+  // Ctrl+clic (`solo`) : l'inverse, seule elle reste visible ; si c'était déjà
+  // le cas, tout réapparaît. Les catégories sans pastille ne bougent pas.
+  function toggleCategory(hidden, ids, id, solo) {
+    if (!solo) return hidden.includes(id) ? hidden.filter((c) => c !== id) : [...hidden, id];
+    const others = ids.filter((c) => c !== id);
+    const kept = hidden.filter((c) => !ids.includes(c));
+    const alone = !hidden.includes(id) && others.every((c) => hidden.includes(c));
+    return alone ? kept : [...kept, ...others];
+  }
+
   // Lieux et chemins dont le nom contient la recherche (sans tenir compte des
   // accents ni de la casse) : ceux dont le nom commence par elle d'abord, puis
   // par ordre alphabétique ; au plus `limit` résultats.
@@ -189,5 +201,5 @@
     return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
   }
 
-  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, polygonArea, polygonCentroid, ring, pathSummary, convert, extent, normalize, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment, segmentDistance };
+  global.Utils = { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, polygonArea, polygonCentroid, ring, pathSummary, convert, extent, normalize, parseCoords, parsePoints, formatPoints, toggleCategory, searchItems, nearestSegment, segmentDistance };
 })(window);

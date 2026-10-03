@@ -29,7 +29,8 @@ python3 -m http.server 8000
 - **Catégories** : un lieu peut être classé (Base, Ferme, Structure, Village, Biome, Portail,
   Intéressant ; les anciennes catégories Mine et Ressource deviennent « Intéressant »). Des
   pastilles au-dessus de la liste masquent ou affichent chaque catégorie, sur la
-  carte comme dans la liste (réglage gardé dans le navigateur).
+  carte comme dans la liste (réglage gardé dans le navigateur). `Ctrl+clic` (`Cmd+clic` sur Mac)
+  inverse le filtre : seule cette catégorie reste affichée ; un second `Ctrl+clic` réaffiche tout.
 - **Icônes d'items** : un lieu peut afficher l'icône d'un item Minecraft (recherche en anglais
   parmi ~1 650 items). Les textures, propriété de Mojang, ne sont pas incluses dans le dépôt :
   elles sont chargées depuis le paquet npm [`minecraft-textures`](https://github.com/destruc7i0n/minecraft-textures)

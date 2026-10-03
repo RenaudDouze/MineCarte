@@ -78,6 +78,11 @@ test('catégories : choix dans le dialogue et filtre', async ({ page }) => {
   await expect(page.locator('#poi-list .item-name')).toHaveText(['Maison']);
   await page.locator('.cat-chip', { hasText: 'Ferme' }).click();
   await expect(page.locator('#poi-list .item-name')).toHaveText(['Champ de blé', 'Maison']);
+  // Ctrl+clic : seule cette catégorie, puis tout.
+  await page.locator('.cat-chip', { hasText: 'Base' }).click({ modifiers: ['Control'] });
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Maison']);
+  await page.locator('.cat-chip', { hasText: 'Base' }).click({ modifiers: ['Control'] });
+  await expect(page.locator('#poi-list .item-name')).toHaveText(['Champ de blé', 'Maison']);
 });
 
 test('annuler / rétablir une suppression', async ({ page }) => {

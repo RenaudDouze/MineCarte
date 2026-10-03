@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, polygonCentroid, ring, pathSummary, convert, extent, parseCoords, parsePoints, formatPoints, searchItems, nearestSegment } = Utils;
+  const { DIM_LABELS, SWATCHES, toLatLng, fromLatLng, esc, h, pathLength, fmt, polygonCentroid, ring, pathSummary, convert, extent, parseCoords, parsePoints, formatPoints, toggleCategory, searchItems, nearestSegment } = Utils;
   const OPTIONS_KEY = 'minecarte:options';
 
   // ?vue=… : carte partagée en lecture seule, gardée en mémoire (rien n'est
@@ -193,11 +193,9 @@
         type: 'button',
         class: `cat-chip${hidden ? ' off' : ''}`,
         'aria-pressed': String(!hidden),
-        title: hidden ? 'Afficher cette catégorie' : 'Masquer cette catégorie',
-        onclick: () => {
-          state.options.hiddenCats = hidden
-            ? state.options.hiddenCats.filter((id) => id !== c.id)
-            : [...state.options.hiddenCats, c.id];
+        title: `${hidden ? 'Afficher' : 'Masquer'} cette catégorie (Ctrl+clic : n'afficher qu'elle)`,
+        onclick: (e) => {
+          state.options.hiddenCats = toggleCategory(state.options.hiddenCats, used.map((u) => u.id), c.id, e.ctrlKey || e.metaKey);
           saveOptions();
           render();
         },
