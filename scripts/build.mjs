@@ -13,7 +13,7 @@ if (syncUrl && !/^https:\/\/[^\s/]+$/.test(syncUrl)) {
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
-for (const entry of ['index.html', 'css', 'js', 'vendor']) cpSync(entry, join(out, entry), { recursive: true });
+for (const entry of ['index.html', 'css', 'js', 'vendor', 'icons']) cpSync(entry, join(out, entry), { recursive: true });
 writeFileSync(join(out, '.nojekyll'), '');
 writeFileSync(join(out, 'js/config.js'), [
   '// Généré par scripts/build.mjs.',

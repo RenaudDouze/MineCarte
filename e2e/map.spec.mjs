@@ -140,3 +140,13 @@ test('zone : polygone tracé à la souris, aire affichée', async ({ page }) => 
   await page.getByLabel('Noms des zones').uncheck();
   await expect(page.locator('.zone-label')).toHaveCount(0);
 });
+
+test('favicon et icône d’écran d’accueil publiés', async ({ page, request }) => {
+  await page.goto('/');
+  for (const [sel, type] of [['link[rel="icon"]', 'image/svg+xml'], ['link[rel="apple-touch-icon"]', 'image/png']]) {
+    const href = await page.locator(sel).getAttribute('href');
+    const res = await request.get(href);
+    expect([href, res.status()]).toEqual([href, 200]);
+    expect(res.headers()['content-type']).toContain(type);
+  }
+});
