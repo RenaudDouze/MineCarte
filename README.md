@@ -94,6 +94,7 @@ python3 -m http.server 8000
 | Fichier | Rôle |
 | --- | --- |
 | `index.html` | Page et dialogues |
+| `icons/` | Favicon (SVG en pixels : bloc d'herbe et repère) et icône d'écran d'accueil |
 | `css/style.css` | Styles |
 | `js/noise.js` | Hachage déterministe (texture du fond) |
 | `js/terrain.js` | Fond des dimensions et grille (`L.GridLayer`) |
