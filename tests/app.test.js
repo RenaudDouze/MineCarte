@@ -2036,6 +2036,28 @@ describe('zones (polygones)', () => {
     expect(app.store.getPath('r')).not.toHaveProperty('closed');
   });
 
+  test('« Coordonnées » : dialogue ouvert sur les points, pour un chemin comme pour une zone', async () => {
+    const app = await withData({ paths: [ZONE(), PATH({ id: 'r' })] });
+    const f = $('#path-form').elements;
+    const [zone, line] = pathLines(app);
+    zone.fire('click', { latlng: ll(3, 4) });
+    button('Coordonnées', popup()).click();
+    expect(popup()).toBeNull();
+    expect([$('#path-dialog').open, text('#path-title'), document.activeElement, f.points.value])
+      .toEqual([true, 'Zone', f.points, '0 0\n100 0\n100 50\n0 50']);
+    // Curseur à la fin, rien de sélectionné : une frappe n'efface pas les points.
+    expect([f.points.selectionStart, f.points.selectionEnd]).toEqual([f.points.value.length, f.points.value.length]);
+    input(f.points, '0 0\n100 0\n100 100\n0 100');
+    submit($('#path-form'));
+    expect(app.store.getPath('z')).toMatchObject({ closed: true, points: [[0, 0], [100, 0], [100, 100], [0, 100]] });
+    line.fire('click', { latlng: ll(3, 4) });
+    button('Coordonnées', popup()).click();
+    expect([text('#path-title'), document.activeElement]).toEqual(['Chemin', f.points]);
+    input(f.points, '0 0\n30 40\n60 40');
+    submit($('#path-form'));
+    expect(app.store.getPath('r').points).toEqual([[0, 0], [30, 40], [60, 40]]);
+  });
+
   test('nouvelle zone par coordonnées', async () => {
     const app = await boot();
     $('#new-path-coords').click();

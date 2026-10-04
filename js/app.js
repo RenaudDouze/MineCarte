@@ -642,6 +642,7 @@
         ? h('div', { class: 'popup-sub' }, `≈ ${fmt(pathLength(path.points) * 8)} blocs dans l'Overworld`) : null,
       h('div', { class: 'popup-actions edit' },
         h('button', { type: 'button', onclick: () => { map.closePopup(); openPathDialog(path); } }, 'Modifier'),
+        h('button', { type: 'button', onclick: () => { map.closePopup(); openPathDialog(path, true); } }, 'Coordonnées'),
         h('button', { type: 'button', onclick: () => { map.closePopup(); startEditing(path.id); } }, 'Éditer le tracé'),
         h('button', { type: 'button', onclick: () => { map.closePopup(); startDrawing({ pathId: path.id }); } }, 'Prolonger'),
         h('button', {
@@ -683,7 +684,9 @@
     f.closed.checked = s.closed;
   }
 
-  function openPathDialog(path) {
+  // `byCoords` : curseur dans les points plutôt que dans le nom (un nouveau
+  // chemin commence toujours par ses points).
+  function openPathDialog(path, byCoords) {
     const form = $('#path-form');
     form.elements.id.value = path.id || '';
     form.elements.dim.value = path.dim;
@@ -692,9 +695,12 @@
     updateWeightPreview();
     updatePathInfo();
     $('#path-dialog').showModal();
-    const first = path.id ? form.elements.label : form.elements.points;
-    first.focus();
-    first.select();
+    if (path.id && !byCoords) {
+      form.elements.label.focus();
+      form.elements.label.select();
+    } else {
+      form.elements.points.focus();
+    }
   }
 
   // Longueur et nombre de points saisis, ou la ligne illisible.

@@ -47,8 +47,9 @@ python3 -m http.server 8000
   - Édition : glisser un sommet pour le déplacer, clic sur un segment pour insérer un point,
     clic droit sur un sommet pour le supprimer. « Prolonger » ajoute des points à la fin.
   - Par coordonnées : « Par coordonnées » (onglet Chemins) crée un chemin à partir d'une liste
-    de points, un par ligne (`X Z` ou `X Y Z`, Y ignoré). Le même champ « Points » du dialogue
-    « Modifier » permet de corriger les points d'un chemin existant au bloc près.
+    de points, un par ligne (`X Z` ou `X Y Z`, Y ignoré). « Coordonnées » (bulle d'un chemin ou
+    d'une zone) ouvre son dialogue sur le champ « Points » pour corriger, ajouter ou retirer des
+    points au bloc près.
 - **Zones** (onglet Zones) : « + Tracer une zone » (ou « Commencer une zone ici » au clic droit)
   trace un polygone fermé, rempli de sa couleur, avec son aire en blocs² et son périmètre. Le nom
   de chaque zone est écrit sur la carte, en son centre (réglage « Noms des zones »). Une zone se
