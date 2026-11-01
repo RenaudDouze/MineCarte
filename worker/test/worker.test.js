@@ -21,7 +21,7 @@ function memoryKV() {
   };
 }
 
-const env = (extra = {}) => ({ SYNC_KV: memoryKV(), ALLOWED_ORIGIN: 'https://renauddouze.github.io/MineCarte', ...extra });
+const env = (extra = {}) => ({ SYNC_KV: memoryKV(), ALLOWED_ORIGIN: 'https://douzeensemble.github.io/MineCarte', ...extra });
 const call = (e, method, path, body) => worker.fetch(new Request(
   `https://w.example${path}`,
   body === undefined ? { method } : { method, body: typeof body === 'string' ? body : JSON.stringify(body) },
@@ -107,7 +107,7 @@ describe('CORS', () => {
     expect(res.status).toBe(204);
     expect(await res.text()).toBe('');
     expect(Object.fromEntries(res.headers)).toMatchObject({
-      'access-control-allow-origin': 'https://renauddouze.github.io',
+      'access-control-allow-origin': 'https://douzeensemble.github.io',
       'access-control-allow-methods': 'GET, PUT, POST, DELETE, OPTIONS',
       'access-control-allow-headers': 'Content-Type',
     });
@@ -168,7 +168,7 @@ describe('routage', () => {
     e.SYNC_KV.get = async () => { throw new Error('KV absent'); };
     let res = await call(e, 'GET', '/api/sync/AAAAAAAA');
     expect(res.status).toBe(500);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://renauddouze.github.io');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://douzeensemble.github.io');
     expect(await res.json()).toEqual({ error: 'Erreur interne du serveur.', detail: 'KV absent' });
     e.SYNC_KV.get = async () => { throw 'texte'; };
     res = await call(e, 'GET', '/api/sync/AAAAAAAA');
