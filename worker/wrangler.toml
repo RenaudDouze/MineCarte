@@ -12,4 +12,4 @@ id = "__CLOUDFLARE_KV_NAMESPACE_ID__"
 
 [vars]
 # Origine autorisée (schéma + hôte, sans chemin). "*" pour tout accepter.
-ALLOWED_ORIGIN = "https://renauddouze.github.io"
+ALLOWED_ORIGIN = "https://douzeensemble.github.io"

@@ -46,7 +46,7 @@ Ensuite, après chaque CI verte sur `main`, le worker est redéployé s'il a
 changé, et le site à chaque fois.
 
 L'origine autorisée à appeler le worker (`ALLOWED_ORIGIN`) est définie dans
-`wrangler.toml` : `https://renauddouze.github.io`.
+`wrangler.toml` : `https://douzeensemble.github.io`.
 
 ## Développement
 
