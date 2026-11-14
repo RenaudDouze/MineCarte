@@ -38,7 +38,7 @@ jobs:
       - run: npm run typecheck
 
   unit-tests:
-    name: Tests unitaires + couverture 100 %
+    name: Tests unitaires + couverture
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -76,7 +76,7 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
-  mutation-plan:
+  mutation-testing-plan:
     name: Mutation testing — plan
     runs-on: ubuntu-latest
     outputs:
@@ -91,12 +91,12 @@ jobs:
       - id: plan
         run: node .github/scripts/mutation-matrix.mjs
 
-  mutation-tests-module:
+  mutation-testing-module:
     name: Mutation testing — ${{ matrix.name }}
-    needs: mutation-plan
+    needs: mutation-testing-plan
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.mutation-plan.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.mutation-testing-plan.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -116,25 +116,25 @@ jobs:
           path: reports/mutation/
           retention-days: 14
 
-  # Un seul check stable « Mutation testing (100 %) » pour la protection de
+  # Un seul check stable « Mutation testing (logique pure) » pour la protection de
   # branche, quel que soit le nombre de modules (voir README.md).
-  mutation-tests:
-    name: Mutation testing (100 %)
-    needs: mutation-tests-module
+  mutation-testing:
+    name: Mutation testing (logique pure)
+    needs: mutation-testing-module
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Tous les modules à 100 %
         env:
-          RESULT: ${{ needs.mutation-tests-module.result }}
+          RESULT: ${{ needs.mutation-testing-module.result }}
         run: |
           if [ "$RESULT" != "success" ]; then
             echo "::error::Mutation testing : au moins un module sous 100 % ($RESULT)."
             exit 1
           fi
 
-  worker:
-    name: Worker de synchronisation (bundle + audit)
+  worker-tests:
+    name: Worker de synchronisation
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -167,8 +167,8 @@ jobs:
       - run: npm audit --audit-level=high
 
   build:
-    name: Build du site
-    needs: [lint, typecheck, unit-tests, e2e-tests, mutation-tests, worker, audit]
+    name: Build de production
+    needs: [lint, typecheck, unit-tests, e2e-tests, mutation-testing, worker-tests, audit]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
