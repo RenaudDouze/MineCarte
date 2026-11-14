@@ -127,15 +127,15 @@ npm run build           # site statique dans _site/ (SYNC_WORKER_URL pour la syn
 
 La CI (`.github/workflows/ci.yml`) lance sur chaque PR, dans des jobs séparés : lint, types,
 tests unitaires + couverture 100 %, tests e2e, mutation testing à 100 % (un job par module,
-agrégés dans le check « Mutation testing (100 %) »), construction du worker, audit des
+agrégés dans le check « Mutation testing (logique pure) »), construction du worker, audit des
 dépendances, puis le build. Le site et le worker ne sont déployés qu'après une CI verte sur
 `main`. CodeQL et Dependabot complètent le tout.
 
 Pour bloquer le merge d'une PR tant qu'un contrôle échoue : Settings → Branches → règle sur
 `main` → *Require status checks to pass*, avec les checks « Linter », « Vérification des
-types », « Tests unitaires + couverture 100 % », « Tests fonctionnels (Playwright) »,
-« Mutation testing (100 %) », « Worker de synchronisation (bundle + audit) », « Audit des
-dépendances » et « Build du site ».
+types », « Tests unitaires + couverture », « Tests fonctionnels (Playwright) »,
+« Mutation testing (logique pure) », « Worker de synchronisation », « Audit des
+dépendances », « Build de production » et « Analyse » (CodeQL).
 
 Coordonnées : la carte utilise `L.CRS.Simple`, avec 1 pixel = 1 bloc au zoom 0,
 `lng = X` et `lat = -Z` (Z croît vers le sud, comme dans le jeu).
