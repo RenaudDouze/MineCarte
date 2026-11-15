@@ -150,7 +150,10 @@ jobs:
       # Le code du worker est testé avec le reste (tests unitaires, mutation) ;
       # ici on vérifie que Wrangler sait le construire, sans rien déployer.
       - run: npx wrangler deploy --dry-run --outdir dist
-      - run: npm audit --audit-level=high
+      - name: Audit des dépendances de production
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit complet (production + développement)
+        run: npm audit --audit-level=high
 
   audit:
     name: Audit des dépendances
@@ -164,7 +167,10 @@ jobs:
       - run: npm ci
       # Outils de développement uniquement : le site publié n'embarque aucune
       # dépendance npm (Leaflet est dans vendor/).
-      - run: npm audit --audit-level=high
+      - name: Audit des dépendances de production
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Audit complet (production + développement)
+        run: npm audit --audit-level=high
 
   build:
     name: Build de production
