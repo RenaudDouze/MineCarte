@@ -31,7 +31,7 @@ Un fichier : `npx vitest run tests/store.test.js`, `npx playwright test e2e/poi.
 - **Mutation 100 %** sur les modules listés dans `targets` de `stryker.config.mjs` (la matrice
   CI en est déduite : un nouveau module s'y ajoute avec ses fichiers de test). `app.js`
   (câblage Leaflet/DOM) est muté lui aussi, découpé en plages de lignes
-  (`js/app.js:1-150`…, un job de CI chacune) : en ajoutant du code, ajuster les plages
+  (`js/app.js:1-150`…, ~50-75 lignes, un job de CI chacune) : en ajoutant du code, ajuster les plages
   pour qu'elles couvrent tout le fichier. Un fichier long se découpe ainsi, jamais en
   désactivant des mutants.
 - Mutant équivalent : simplifier le code (supprimer le test redondant, la valeur par défaut
