@@ -57,3 +57,12 @@ Un fichier : `npx vitest run tests/store.test.js`, `npx playwright test e2e/poi.
 (`workflow_run`). Configuration par variables (`SYNC_WORKER_URL`,
 `CLOUDFLARE_KV_NAMESPACE_ID`) et secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) du
 dépôt ; voir `worker/README.md`.
+
+## Documentation, versioning and architecture rules
+
+- `doc/` holds the stable truth for humans and agents: `architecture.md` (script load order), `codage.md` (conventions), `improvement.md` (backlog).
+- Commits follow Conventional Commits (`type(scope): subject`); enable the hook with `git config core.hooksPath .githooks`. The version is derived from the commits by semantic-release (`release.yml`): never edit a version number or a changelog by hand.
+
+## Écarts au guide
+
+- ARCH-01 / ARCH-02 : le projet charge des scripts classiques (espace de noms global, aucun `import`), donc `dependency-cruiser` n'a aucun graphe à vérifier. L'ordre des balises `<script>` fait office d'architecture, décrit dans `doc/architecture.md`.
