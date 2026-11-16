@@ -18,7 +18,7 @@ npm run lint              # oxlint --deny-warnings
 npm run typecheck         # tsc (allowJs + checkJs, globals dans types/globals.d.ts)
 npm test                  # vitest run (jsdom)
 npm run test:coverage     # seuil 100 % lignes/branches/fonctions/instructions
-npm run test:mutation     # Stryker, seuil 100 % ; MUTATE=js/store.js pour un module
+npm run test:mutation     # Stryker, seuil 100 % ; MUTATE=js/store.js ou js/app.js:1-150 pour un module/une plage
 npm run test:e2e          # Playwright sur _site-e2e (build + serveur statique)
 npm run build             # _site/ ; SYNC_WORKER_URL=https://… pour la synchronisation
 ```
@@ -29,9 +29,11 @@ Un fichier : `npx vitest run tests/store.test.js`, `npx playwright test e2e/poi.
 
 - **Couverture 100 %** sur `js/**` et `worker/src/**`. Tout nouveau code arrive avec ses tests.
 - **Mutation 100 %** sur les modules listés dans `targets` de `stryker.config.mjs` (la matrice
-  CI en est déduite : un nouveau module logique s'y ajoute avec ses fichiers de test).
-  `app.js` (câblage Leaflet/DOM) est couvert à 100 % mais pas muté : y garder le moins de
-  logique possible et la déplacer dans un module testé (`utils.js`, `store.js`…).
+  CI en est déduite : un nouveau module s'y ajoute avec ses fichiers de test). `app.js`
+  (câblage Leaflet/DOM) est muté lui aussi, découpé en plages de lignes
+  (`js/app.js:1-150`…, un job de CI chacune) : en ajoutant du code, ajuster les plages
+  pour qu'elles couvrent tout le fichier. Un fichier long se découpe ainsi, jamais en
+  désactivant des mutants.
 - Mutant équivalent : simplifier le code (supprimer le test redondant, la valeur par défaut
   inatteignable) plutôt que de désactiver le mutant. Pas de `// Stryker disable`.
 - Un test ne vérifie pas seulement qu'une erreur est levée : il vérifie laquelle

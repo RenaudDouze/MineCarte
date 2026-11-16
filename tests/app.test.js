@@ -141,6 +141,46 @@ describe('dimensions', () => {
     expect(app.map.getZoom()).toBe(3);
   });
 
+  test('même dimension : fenêtre contextuelle conservée, couche non rechargée', async () => {
+    const app = await boot();
+    app.map.openPopup('ouverte', ll(0, 0));
+    const terrain = layers(app, (l) => l instanceof Terrain.TerrainLayer)[0];
+    const removed = vi.fn();
+    terrain.on('remove', removed);
+    $('.dim-btn[data-dim="overworld"]').click();
+    expect(popup().textContent).toBe('ouverte');
+    // Un réglage réapplique les couches : la couche courante reste en place.
+    $('#opt-grid').checked = false;
+    $('#opt-grid').dispatchEvent(new Event('change', { bubbles: true }));
+    expect(removed).not.toHaveBeenCalled();
+    expect(layers(app, (l) => l instanceof Terrain.TerrainLayer)).toEqual([terrain]);
+    $('.dim-btn[data-dim="nether"]').click();
+    expect(popup()).toBeNull();
+  });
+
+  test('bouton « tout afficher » : lien factice et barre Leaflet', async () => {
+    await boot();
+    const fit = $('.fit-all');
+    expect(fit.getAttribute('href')).toBe('#');
+    expect(fit.parentElement.classList.contains('leaflet-bar')).toBe(true);
+  });
+
+  test('l’ancre suit le changement de dimension', async () => {
+    const app = await boot();
+    // Même centre et même zoom dans les deux dimensions : aucun déplacement de carte.
+    app.map.setView(ll(0, 0), 1, { animate: false });
+    $('.dim-btn[data-dim="nether"]').click();
+    expect(location.hash).toBe('#nether/0/0/1');
+  });
+
+  test('ancre vers la dimension courante : la vue est appliquée', async () => {
+    const app = await boot();
+    location.hash = '#overworld/5/6/-1';
+    await new Promise((r) => window.addEventListener('hashchange', r, { once: true }));
+    expect(app.map.getZoom()).toBe(-1);
+    expect(app.map.getCenter()).toEqual(ll(5, 6));
+  });
+
   test('ancre modifiée à la main', async () => {
     const app = await boot();
     location.hash = '#end/5/6/-1';
@@ -214,6 +254,35 @@ describe('POI sur la carte', () => {
     expect(dot.className).toBe('dot dot-item');
     expect(dot.getAttribute('style')).toBe('border-color:#e53935');
     expect(dot.querySelector('img').getAttribute('src')).toBe(TEX);
+    expect(dot.querySelector('img').getAttribute('alt')).toBe('');
+  });
+
+  test('pastille sans icône, structure de la liste, un seul filtre à deux catégories', async () => {
+    await withData({ pois: [POI({ id: 'a', name: 'A', category: 'base' }), POI({ id: 'b', name: 'B' })] });
+    const dot = $('#poi-list .dot');
+    expect(dot.getAttributeNames().sort()).toEqual(['class', 'style']);
+    expect(dot.getAttribute('class')).toBe('dot');
+    expect(dot.getAttribute('style')).toBe('background:#e53935');
+    expect($('#poi-list .item-main').getAttribute('class')).toBe('item-main');
+    expect($('#cat-filter').hidden).toBe(false);
+    expect($('#cat-filter .cat-chip').getAttribute('type')).toBe('button');
+  });
+
+  test('un nouveau rendu ne duplique pas les marqueurs ; lien vers soi-même ignoré', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'A' })] });
+    // Le magasin retire les liens vers soi-même : on en force un pour vérifier le rendu.
+    app.store.data.pois[0].links = ['a'];
+    change($('#opt-links'), false);
+    change($('#opt-links'), true);
+    expect(layers(app, (l) => l instanceof L.Marker)).toHaveLength(1);
+    expect(layers(app, (l) => l instanceof L.Polyline && l.options.pane === 'linkPane')).toHaveLength(0);
+  });
+
+  test('les chemins restent affichés pendant le tracé d’un autre', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    $('#new-path').click();
+    change($('#opt-links'), false);
+    expect(pathLines(app)).toHaveLength(1);
   });
 
   test('icônes chargées seulement si un POI en utilise, échec silencieux', async () => {
@@ -252,6 +321,40 @@ describe('POI sur la carte', () => {
     expect(leafletPopup.getLatLng()).toEqual(ll(10, 20));
   });
 
+  test('popup et liste : structure HTML exacte', async () => {
+    const app = await withData({ pois });
+    app.state.markers.get('a').fire('click');
+    expect(popup().innerHTML).toBe(
+      '<div class="poi-popup"><div class="popup-title"><span class="dot" style="background:#e53935"></span>Alpha</div>'
+      + '<div class="popup-coords"><span>X 10</span><span class="y" title="Hauteur (information)">Y 64</span><span>Z 20</span></div>'
+      + '<div class="popup-sub">≈ Nether : X 1, Z 2</div>'
+      + '<div class="popup-links"><div class="popup-label">Liens</div>'
+      + '<button type="button" class="link-btn" title="Aller à Beta"><span class="dot" style="background:#1e88e5"></span><span class="link-name">Beta</span><span class="arrow">➜</span></button>'
+      + '<button type="button" class="link-btn" title="Aller à Nether"><span class="dot" style="background:#e53935"></span><span class="link-name">Nether</span><span class="badge badge-nether">Nether</span><span class="arrow">➜</span></button></div>'
+      + '<div class="popup-actions"><button type="button" class="edit">Modifier</button>'
+      + '<button type="button" class="edit" title="Créer un lieu lié dans le Nether aux coordonnées converties">Portail Nether</button>'
+      + '<button type="button">Copier</button><button type="button" class="danger edit">Supprimer</button></div></div>',
+    );
+    expect($('#poi-list').innerHTML).toBe(
+      '<li class="item"><span class="dot" style="background:#e53935"></span><span class="item-main"><span class="item-name">Alpha</span><span class="item-sub">X 10 · Y 64 · Z 20</span></span><span class="item-links" title="Liens">🔗 2</span></li>'
+      + '<li class="item"><span class="dot" style="background:#1e88e5"></span><span class="item-main"><span class="item-name">Beta</span><span class="item-sub">X -5 · Y 70 · Z 3</span></span><span class="item-links" title="Liens">🔗 1</span></li>',
+    );
+  });
+
+  test('listes : message « vide » seulement sans élément, chemins de la dimension seulement', async () => {
+    await withData({ paths: [
+      PATH({ id: 'r', name: 'Route' }),
+      PATH({ id: 'n', name: 'Nether', dim: 'nether' }),
+      PATH({ id: 'z', name: 'Zone', closed: true, points: [[0, 0], [10, 0], [10, 10]] }),
+    ], pois: [POI({ id: 'a' })] });
+    expect($('#poi-list .empty')).toBeNull();
+    expect($$('#path-list .item-name').map((e) => e.textContent)).toEqual(['Route']);
+    expect($('#path-list .empty')).toBeNull();
+    expect($$('#zone-list .item-name').map((e) => e.textContent)).toEqual(['Zone']);
+    expect($('#zone-list .empty')).toBeNull();
+    expect($('#path-list .item-main').getAttribute('class')).toBe('item-main');
+  });
+
   test('popup : sans lien, sans conversion dans l’End', async () => {
     const app = await withData({ pois: [POI({ id: 'e', name: 'Fin', dim: 'end' })] }, { hash: '#end/0/0/0' });
     app.state.markers.get('e').fire('click');
@@ -285,7 +388,10 @@ describe('POI sur la carte', () => {
     expect(popup().querySelector('.popup-title').textContent).toBe('Moyen');
 
     app.map.setView(ll(0, 0), -2, { animate: false });
+    const setView = vi.spyOn(app.map, 'setView');
     go('Loin');
+    expect(fly).toHaveBeenCalledTimes(1);
+    expect(setView).toHaveBeenCalledWith(ll(50000, 0), 0, expect.objectContaining({ animate: false }));
     expect(app.map.getCenter()).toEqual(ll(50000, 0));
     // Zoom jamais négatif après un saut.
     expect(app.map.getZoom()).toBe(0);
@@ -1005,13 +1111,22 @@ describe('édition d’un tracé', () => {
     expect(app.state.edit.points[1]).toEqual([90, 10]);
     expect(app.state.edit.line.getLatLngs()[1]).toEqual(ll(90, 10));
     expect(text('#coords')).toContain('X 90  Z 10');
+    const before = text('#mode-text');
+    const dragged = vertices(app)[1];
     v.fire('dragend');
     expect(text('#mode-text')).toContain('3 points');
+    expect(text('#mode-text')).not.toBe(before);
+    expect(vertices(app)[1]).not.toBe(dragged);
     const stopped = new MouseEvent('click');
     app.state.edit.line.fire('click', { latlng: ll(95, 60), originalEvent: stopped });
+    // L.DomEvent.stop : la propagation vers la carte est coupée.
+    expect(stopped._stopped).toBe(true);
     expect(app.state.edit.points).toEqual([[0, 0], [90, 10], [95, 60], [100, 100]]);
     expect(vertices(app)).toHaveLength(4);
-    vertices(app)[0].fire('contextmenu', { originalEvent: mouse() });
+    const ctx = mouse();
+    vertices(app)[0].fire('contextmenu', { originalEvent: ctx });
+    expect(ctx._stopped).toBe(true);
+    expect(vertices(app)).toHaveLength(3);
     expect(app.state.edit.points).toEqual([[90, 10], [95, 60], [100, 100]]);
     key('Enter');
     expect(app.state.mode).toBe(null);
@@ -1817,6 +1932,10 @@ describe('synchronisation cloud', () => {
 
     $('#share-create').click();
     await until(() => !$('#share-on').hidden);
+    // Un simple changement d'état de synchronisation garde le lien affiché.
+    app.cloud.onStatus({ kind: 'pending', at: null });
+    expect($('#share-on').hidden).toBe(false);
+    expect($('#share-url').value).not.toBe('');
     $('#sync-leave').click();
     expect($('#share-on').hidden).toBe(true);
   });
@@ -2080,6 +2199,7 @@ describe('brouillons des dialogues', () => {
     $('#add-poi').click();
     const f = $('#poi-form').elements;
     input(f.label, 'Base secrète');
+    expect(draftsStored()).toEqual({ poi: { target: 'new', changes: { label: 'Base secrète' } } });
     change(f.category, 'base');
     expect(draftsStored()).toEqual({ poi: { target: 'new', changes: { label: 'Base secrète', category: 'base' } } });
     $('#poi-dialog').close(); // Échap ou clic à côté
@@ -2220,5 +2340,386 @@ describe('croix d’effacement des champs', () => {
     expect(label.value).toBe('');
     expect(localStorage.getItem('minecarte:drafts')).toBeNull();
     expect(app.store.data.pois).toHaveLength(2);
+  });
+});
+
+describe('dialogue POI : détails', () => {
+  const draftsStored = () => localStorage.getItem('minecarte:drafts');
+
+  test('nom sélectionné à l’ouverture', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'Alpha' })] });
+    app.state.markers.get('a').fire('click');
+    button('Modifier', popup()).click();
+    const label = $('#poi-form').elements.label;
+    expect([label.selectionStart, label.selectionEnd]).toEqual([0, 5]);
+  });
+
+  test('liens : cocher puis décocher ne crée pas de brouillon, ordre indifférent', async () => {
+    const app = await withData({ pois: [
+      POI({ id: 'a', name: 'Alpha', links: ['c', 'b'] }),
+      POI({ id: 'b', name: 'Beta', x: 5 }),
+      POI({ id: 'c', name: 'Gamma', x: 9 }),
+    ] });
+    app.state.markers.get('a').fire('click');
+    button('Modifier', popup()).click();
+    $('#poi-links input[value="c"]').click();
+    expect(draftsStored()).not.toBeNull();
+    $('#poi-links input[value="c"]').click();
+    expect(draftsStored()).toBeNull();
+  });
+
+  test('messages d’aide : absents quand il y a des résultats, exacts sinon', async () => {
+    await withData({ pois: [POI({ id: 'a', name: 'Alpha', icon: 'minecraft:diamond' })] }, { fetch: iconFetch() });
+    $('#add-poi').click();
+    expect($('#poi-links .hint')).toBeNull();
+    expect($('#icon-current').innerHTML).toBe('<span class="icon-none">—</span><span>Aucune (pastille de couleur)</span>');
+    $('#icon-choose').click();
+    await until(() => $('#icon-grid .icon-cell'));
+    expect($('#icon-grid .hint')).toBeNull();
+    input($('#icon-search'), 'zzzz');
+    expect($('#icon-grid').innerHTML).toBe('<p class="hint">Aucun item trouvé (recherche en anglais : diamond, totem, bed…).</p>');
+    // Fermer le sélecteur ne redessine pas la grille.
+    $('#icon-search').value = '';
+    $('#icon-choose').click();
+    expect($('#icon-picker').hidden).toBe(true);
+    expect($('#icon-grid .hint')).not.toBeNull();
+    expect($('#icon-grid .icon-cell')).toBeNull();
+  });
+
+  test('aucun autre lieu ; icône d’aperçu ; chargement et échec des icônes', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'Alpha', icon: 'minecraft:diamond' })] }, { fetch: iconFetch() });
+    await flush();
+    app.state.markers.get('a').fire('click');
+    button('Modifier', popup()).click();
+    expect($('#poi-links').innerHTML).toBe('<p class="hint">Aucun autre lieu pour le moment.</p>');
+    expect($('#icon-current').innerHTML).toBe(`<img src="${TEX}" alt=""><span>Diamond</span>`);
+
+    let reject;
+    await boot({ fetch: vi.fn(() => new Promise((_, r) => { reject = r; })) });
+    $('#add-poi').click();
+    $('#icon-choose').click();
+    expect($('#icon-grid').innerHTML).toBe('<p class="hint">Chargement des icônes…</p>');
+    reject(new Error('hors ligne'));
+    await flush();
+    expect($('#icon-grid').innerHTML).toBe('<p class="hint">Impossible de charger les icônes (connexion internet requise).</p>');
+  });
+});
+
+describe('chemins et lieux : détails', () => {
+  const submitEvent = (form) => {
+    const e = new Event('submit', { cancelable: true, bubbles: true });
+    form.dispatchEvent(e);
+    return e;
+  };
+
+  test('popup de chemin : structure exacte', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r', name: 'Route' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    expect(popup().innerHTML).toBe(
+      '<div class="path-popup"><div class="popup-title"><span class="swatch-line" style="background:#43a047"></span>Route</div>'
+      + '<div class="popup-sub">50 blocs · 2 points</div>'
+      + '<div class="popup-actions edit"><button type="button">Modifier</button><button type="button">Coordonnées</button>'
+      + '<button type="button">Éditer le tracé</button><button type="button">Prolonger</button>'
+      + '<button type="button" class="danger">Supprimer</button></div></div>',
+    );
+    button('Prolonger', popup()).click();
+    expect(popup()).toBeNull();
+    expect(app.state.mode).toBe('draw');
+  });
+
+  test('envois de formulaires : action par défaut annulée', async () => {
+    await withData({ pois: [POI({ id: 'a', name: 'Alpha' })], paths: [PATH({ id: 'r' })] });
+    $('#add-poi').click();
+    expect(submitEvent($('#poi-form')).defaultPrevented).toBe(true);
+    $('#new-path').click();
+    $('#new-path-coords').click();
+    const form = $('#path-form');
+    form.elements.points.value = '0 0\n5 5';
+    expect(submitEvent(form).defaultPrevented).toBe(true);
+  });
+
+  test('enregistrer un lieu : options réécrites seulement si une catégorie masquée réapparaît', async () => {
+    const app = await withData({ pois: [POI({ id: 'a', name: 'Alpha', category: 'base' })] });
+    $('#add-poi').click();
+    $('#poi-form').elements.category.value = 'farm';
+    submit($('#poi-form'));
+    expect(localStorage.getItem('minecarte:options')).toBeNull();
+    expect(app.store.data.pois).toHaveLength(2);
+  });
+
+  test('choisir un chemin dans la liste : panneau fermé sur petit écran', async () => {
+    const app = await withData({ paths: [PATH({ id: 'n', dim: 'nether' })] }, { width: 500 });
+    expect($('#path-list .item')).toBeNull();
+    $('.dim-btn[data-dim="nether"]').click();
+    document.body.classList.remove('sidebar-hidden');
+    $('#path-list .item').click();
+    expect(app.state.dim).toBe('nether');
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+  });
+
+  test('chemin existant : nom sélectionné ; modifié, il n’ouvre pas de popup', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r', name: 'Route' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Modifier', popup()).click();
+    const label = $('#path-form').elements.label;
+    expect([label.selectionStart, label.selectionEnd]).toEqual([0, 5]);
+    label.value = 'Autoroute';
+    submit($('#path-form'));
+    expect(popup()).toBeNull();
+    expect(app.store.getPath('r').name).toBe('Autoroute');
+  });
+});
+
+describe('modes tracé et édition : détails', () => {
+  test('un nouveau tracé remplace le précédent et ferme la popup', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    $('#new-path').click();
+    app.map.fire('click', { latlng: ll(5, 5) });
+    $('#new-path').click();
+    expect(app.state.draw.points).toEqual([]);
+    expect(layers(app, (l) => l.options.dashArray === '6 6')).toHaveLength(1);
+    $('#mode-cancel').click();
+    app.state.markers.get('a').fire('click');
+    expect(popup()).not.toBeNull();
+    $('#new-path').click();
+    expect(popup()).toBeNull();
+  });
+
+  test('annuler le dernier point met à jour le tracé et le bandeau', async () => {
+    const app = await boot();
+    $('#new-path').click();
+    app.map.fire('click', { latlng: ll(0, 0) });
+    app.map.fire('click', { latlng: ll(50, 0) });
+    expect(app.state.draw.line.getLatLngs()).toHaveLength(2);
+    $('#mode-undo').click();
+    expect(app.state.draw.line.getLatLngs()).toEqual([ll(0, 0)]);
+    expect(text('#mode-text')).toContain('1 point');
+  });
+
+  test('prolonger un chemin : la popup est fermée', async () => {
+    const app = await withData({ paths: [PATH({ id: 'r' })] });
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Prolonger', popup()).click();
+    expect(popup()).toBeNull();
+    expect(app.state.draw.points).toEqual([[0, 0], [30, 40]]);
+    app.map.fire('click', { latlng: ll(60, 60) });
+    expect(app.store.getPath('r').points).toEqual([[0, 0], [30, 40]]);
+  });
+});
+
+describe('menu, clavier et ancre : détails', () => {
+  const hashTo = async (h) => {
+    location.hash = h;
+    await new Promise((r) => window.addEventListener('hashchange', r, { once: true }));
+  };
+
+  test('Échap sans mode : rien n’est redessiné ; annuler un prolongement réaffiche le chemin', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })], paths: [PATH({ id: 'r' })] });
+    const marker = app.state.markers.get('a');
+    key('Escape');
+    expect(app.state.markers.get('a')).toBe(marker);
+    pathLines(app)[0].fire('click', { latlng: ll(3, 4) });
+    button('Prolonger', popup()).click();
+    expect(pathLines(app)).toHaveLength(0);
+    $('#mode-cancel').click();
+    expect(pathLines(app)).toHaveLength(1);
+  });
+
+  test('menu contextuel : structure exacte', async () => {
+    const app = await boot();
+    app.map.fire('contextmenu', { latlng: ll(12, -7), originalEvent: mouse(100, 50) });
+    expect($('#context-menu').innerHTML).toBe(
+      '<div class="menu-title">X 12 · Z -7</div>'
+      + '<button type="button" class="edit">📍 Ajouter un lieu ici</button>'
+      + '<button type="button" class="edit">〰 Commencer un chemin ici</button>'
+      + '<button type="button" class="edit">⬠ Commencer une zone ici</button>'
+      + '<button type="button">📋 Copier les coordonnées</button>'
+      + '<button type="button">🎯 Centrer ici</button>',
+    );
+  });
+
+  test('clavier : saisie dans un champ ignorée, Entrée et retour arrière annulent l’action par défaut', async () => {
+    const app = await boot();
+    $('#new-path').click();
+    app.map.fire('click', { latlng: ll(0, 0) });
+    app.map.fire('click', { latlng: ll(50, 0) });
+    const field = $('#poi-search');
+    key('Backspace', {}, field);
+    key('/', {}, field);
+    expect(app.state.draw.points).toHaveLength(2);
+    expect(document.activeElement).not.toBe(field);
+    expect(key('Backspace').defaultPrevented).toBe(true);
+    expect(app.state.draw.points).toHaveLength(1);
+    expect(key('Enter', {}, field).defaultPrevented).toBe(false);
+    expect(key('Enter').defaultPrevented).toBe(true);
+  });
+
+  test('ancre : mise à jour sans titre, lecture stricte', async () => {
+    const app = await boot();
+    const replace = vi.spyOn(history, 'replaceState');
+    app.map.setView(ll(7, 8), 2, { animate: false });
+    expect(replace).toHaveBeenCalledWith(null, '', '#overworld/7/8/2');
+    await hashTo('#end/5/6/-10');
+    expect(app.state.dim).toBe('end');
+    await hashTo('#nether/1/2/1x');
+    expect(app.state.dim).toBe('end');
+    await hashTo('#a#nether/1/2/1');
+    expect(app.state.dim).toBe('end');
+  });
+});
+
+describe('recherche globale : détails', () => {
+  const go = (value) => { input($('#global-search'), value); submit($('#search')); };
+
+  test('fenêtre d’emplacement : structure exacte et création sans hauteur', async () => {
+    const app = await boot();
+    go('10 20');
+    expect(popup().innerHTML).toBe(
+      '<div class="location-popup"><div class="popup-title">📌 X 10 · Z 20</div>'
+      + '<div class="popup-sub">≈ Nether : X 1, Z 2</div>'
+      + '<div class="popup-actions edit"><button type="button" class="primary">📍 Créer un lieu</button>'
+      + '<button type="button">〰 Commencer un chemin</button><button type="button">⬠ Commencer une zone</button></div>'
+      + '<div class="popup-actions"><button type="button">📋 Copier</button></div></div>',
+    );
+    // La carte a bougé depuis : le lieu est créé à l'emplacement cherché, pas au centre.
+    app.map.setView(ll(500, 600), 1, { animate: false });
+    button('Créer un lieu', popup()).click();
+    const f = $('#poi-form').elements;
+    expect([f.x.value, f.z.value]).toEqual(['10', '20']);
+    expect(app.state.mode).toBe(null);
+    $('#poi-dialog').close();
+    go('10 20');
+    $('#new-path').click();
+    go('30 40');
+    expect(popup().innerHTML).toContain('<button type="button" class="primary">➕ Ajouter au tracé en cours</button>');
+  });
+
+  test('résultats : structure, élément actif, Entrée, focus rendu au choix', async () => {
+    const app = await withData({ pois: [
+      POI({ id: 'a', name: 'Maison', x: 5, z: 6 }),
+      POI({ id: 'b', name: 'Maisonnette', x: 50, z: 60 }),
+    ] });
+    const field = $('#global-search');
+    field.focus();
+    input(field, 'maison');
+    const items = $$('#search-results li');
+    expect(items).toHaveLength(2);
+    expect(items[0].innerHTML).toBe(
+      '<span class="dot" style="background:#e53935"></span><span class="item-main"><span class="item-name">Maison</span><span class="item-sub">Overworld · X 5 · Z 6</span></span>',
+    );
+    key('ArrowDown', {}, field);
+    expect(items.map((li) => li.classList.contains('active'))).toEqual([false, true]);
+    expect(items.map((li) => li.getAttribute('aria-selected'))).toEqual(['false', 'true']);
+    const down = key('ArrowUp', {}, field);
+    expect(down.defaultPrevented).toBe(true);
+    const sub = new Event('submit', { cancelable: true, bubbles: true });
+    $('#search').dispatchEvent(sub);
+    expect(sub.defaultPrevented).toBe(true);
+    expect(document.activeElement).not.toBe(field);
+    expect(popup().querySelector('.popup-title').textContent).toBe('Maison');
+    expect(app.state.dim).toBe('overworld');
+  });
+
+  test('rien à valider avant ou après la fermeture de la liste', async () => {
+    await withData({ pois: [POI({ id: 'a', name: 'Maison' })] });
+    const field = $('#global-search');
+    field.value = 'abc';
+    submit($('#search'));
+    expect(field.value).toBe('abc');
+    input(field, 'mais');
+    expect($$('#search-results li')).toHaveLength(1);
+    field.dispatchEvent(new Event('blur'));
+    field.value = 'abc';
+    submit($('#search'));
+    expect(field.value).toBe('abc');
+    expect(popup()).toBeNull();
+  });
+});
+
+describe('panneau et données : détails', () => {
+  test('nouvelle zone : panneau fermé sous 720 px seulement', async () => {
+    await boot({ width: 500 });
+    document.body.classList.remove('sidebar-hidden');
+    $('#new-zone').click();
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+    await boot({ width: 720 });
+    document.body.classList.remove('sidebar-hidden');
+    $('#new-path').click();
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(false);
+  });
+
+  test('effacer et importer ferment la popup ouverte', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    vi.stubGlobal('alert', vi.fn());
+    app.state.markers.get('a').fire('click');
+    expect(popup()).not.toBeNull();
+    $('#reset').click();
+    expect(popup()).toBeNull();
+    app.store.savePoi({ name: 'B', color: '#e53935', dim: 'overworld', x: 0, y: 0, z: 0, links: [] });
+    app.map.openPopup('x', ll(0, 0));
+    vi.spyOn($('#import-file'), 'click').mockImplementation(() => {});
+    setFiles($('#import-file'), [{ text: async () => JSON.stringify(DATA({})) }]);
+    await flush();
+    expect(popup()).toBeNull();
+  });
+});
+
+describe('démarrage, historique et synchronisation : détails', () => {
+  const T = new Date(2026, 8, 29, 20, 15).getTime();
+
+  test('liaison à un code : action par défaut annulée', async () => {
+    await boot({ syncUrl: 'https://sync.test', fetch: createServer().fetch });
+    const e = new Event('submit', { cancelable: true, bubbles: true });
+    $('#sync-join').dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  test('annuler ferme la popup ouverte et reste rétablissable', async () => {
+    const app = await withData({ pois: [POI({ id: 'a' })] });
+    app.store.savePoi(POI({ id: 'b' }));
+    app.map.openPopup('x', ll(0, 0));
+    key('z', { ctrlKey: true });
+    expect(popup()).toBeNull();
+    expect(app.store.data.pois).toHaveLength(1);
+    key('y', { ctrlKey: true });
+    expect(app.store.data.pois).toHaveLength(2);
+  });
+
+  test('historique : structure exacte, restauration ferme la popup, copie de départ espacée', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: T });
+    const old = { time: T - 60 * 1000, data: DATA({ pois: [POI({ id: 'old' })] }) };
+    const app = await withData({ pois: [POI({ id: 'a' })] }, { storage: { 'minecarte:backups': [old] } });
+    // Moins de 10 minutes après la dernière copie : pas de nouvelle copie au démarrage.
+    expect($$('#backup-list .item')).toHaveLength(1);
+    expect($('#backup-list').innerHTML).toBe(
+      '<li class="item"><span class="item-main"><span class="item-name">29/09/2026 20:14</span><span class="item-sub">1 lieu · 0 chemin</span></span>'
+      + '<button type="button">Restaurer</button></li>',
+    );
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    app.map.openPopup('x', ll(0, 0));
+    button('Restaurer', $('#backup-list')).click();
+    expect(popup()).toBeNull();
+    app.store.replaceAll({ seed: 's' });
+    expect($('#backup-list').innerHTML).toContain('<li class="item">');
+  });
+
+  test('liste d’historique vide : structure exacte', async () => {
+    await boot();
+    expect($('#backup-list').innerHTML).toBe('<li class="empty">Aucune copie pour l\'instant.</li>');
+  });
+
+  test('icônes chargées dès qu’un lieu parmi d’autres en utilise une', async () => {
+    const f = iconFetch();
+    await withData({ pois: [POI({ id: 'a' }), POI({ id: 'b', icon: 'minecraft:diamond' })] }, { fetch: f });
+    await flush();
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  test('panneau masqué au démarrage sous 720 px seulement', async () => {
+    await boot({ width: 719 });
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(true);
+    await boot({ width: 720 });
+    expect(document.body.classList.contains('sidebar-hidden')).toBe(false);
   });
 });

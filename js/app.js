@@ -35,7 +35,7 @@
   function loadOptions() {
     const defaults = { grid: true, labels: true, zoneLabels: true, links: true, allDims: false, hiddenCats: [] };
     try {
-      return Object.assign(defaults, JSON.parse(localStorage.getItem(OPTIONS_KEY) || '{}'));
+      return Object.assign(defaults, JSON.parse(/** @type {string} */ (localStorage.getItem(OPTIONS_KEY))));
     } catch {
       return defaults;
     }
@@ -83,7 +83,7 @@
 
   const terrainLayers = {};
   function terrainLayer(dim) {
-    if (!terrainLayers[dim]) terrainLayers[dim] = new Terrain.TerrainLayer({ dimension: dim });
+    terrainLayers[dim] ??= new Terrain.TerrainLayer({ dimension: dim });
     return terrainLayers[dim];
   }
   const gridLayer = new Terrain.GridOverlay();
@@ -126,11 +126,11 @@
   function applyLayers() {
     const current = terrainLayer(state.dim);
     for (const layer of Object.values(terrainLayers)) {
-      if (layer !== current && map.hasLayer(layer)) map.removeLayer(layer);
+      if (layer !== current) map.removeLayer(layer);
     }
-    if (!map.hasLayer(current)) current.addTo(map);
-    if (state.options.grid && !map.hasLayer(gridLayer)) gridLayer.addTo(map);
-    if (!state.options.grid && map.hasLayer(gridLayer)) map.removeLayer(gridLayer);
+    current.addTo(map);
+    if (state.options.grid) gridLayer.addTo(map);
+    else map.removeLayer(gridLayer);
     map.getContainer().style.background = Terrain.background[state.dim];
     map.getContainer().classList.toggle('hide-labels', !state.options.labels);
   }
@@ -147,7 +147,6 @@
     const v = view || state.views[dim];
     map.setView(v.center, v.zoom, { animate: false });
     render();
-    updateHash();
     updateCoords(map.getCenter());
   }
 
@@ -228,7 +227,7 @@
       for (const poi of pois) {
         for (const id of poi.links) {
           const other = store.getPoi(id);
-          if (!other || other.dim !== state.dim || !isShown(other) || other.id < poi.id) continue;
+          if (!other || other.dim !== state.dim || !isShown(other) || other.id <= poi.id) continue;
           L.polyline([toLatLng(poi.x, poi.z), toLatLng(other.x, other.z)], {
             pane: 'linkPane',
             color: '#ffffff',
@@ -526,7 +525,7 @@
   function openPoiDialog(poi) {
     const form = $('#poi-form');
     const center = fromLatLng(map.getCenter());
-    const data = Object.assign({ name: '', color: '#e53935', icon: '', category: '', dim: state.dim, x: center.x, y: 64, z: center.z, links: [] }, poi);
+    const data = Object.assign({ name: '', color: '#e53935', icon: '', dim: state.dim, x: center.x, y: 64, z: center.z }, poi);
     $('#poi-dialog-title').textContent = data.id ? 'Modifier le lieu' : 'Nouveau lieu';
     form.elements.id.value = data.id || '';
     $('#icon-picker').hidden = true;
@@ -644,7 +643,7 @@
         h('button', { type: 'button', onclick: () => { map.closePopup(); openPathDialog(path); } }, 'Modifier'),
         h('button', { type: 'button', onclick: () => { map.closePopup(); openPathDialog(path, true); } }, 'Coordonnées'),
         h('button', { type: 'button', onclick: () => { map.closePopup(); startEditing(path.id); } }, 'Éditer le tracé'),
-        h('button', { type: 'button', onclick: () => { map.closePopup(); startDrawing({ pathId: path.id }); } }, 'Prolonger'),
+        h('button', { type: 'button', onclick: () => startDrawing({ pathId: path.id }) }, 'Prolonger'),
         h('button', {
           type: 'button',
           class: 'danger',
@@ -660,7 +659,7 @@
 
   function focusPath(id) {
     const path = store.getPath(id);
-    if (path.dim !== state.dim) setDimension(path.dim);
+    setDimension(path.dim);
     const bounds = L.latLngBounds(path.points.map(([x, z]) => toLatLng(x, z)));
     map.fitBounds(bounds.pad(0.2), { maxZoom: 2, animate: false });
     const mid = path.points[Math.floor(path.points.length / 2)];
@@ -764,7 +763,7 @@
     state.mode = 'draw';
     state.draw = {
       pathId: existing ? existing.id : null,
-      points: existing ? existing.points.map((p) => p.slice()) : [],
+      points: existing ? [...existing.points] : [],
       color,
       closed: isZone,
       line: new Shape([], { pane: 'pathPane', color, weight, fillColor: color, fillOpacity: 0.2, interactive: false }).addTo(drawLayer),
@@ -831,7 +830,6 @@
   const vertexIcon = L.divIcon({ className: 'vertex-icon', iconSize: [12, 12] });
 
   function startEditing(pathId) {
-    cancelMode();
     const path = store.getPath(pathId);
     if (!path) return;
     state.mode = 'edit';
@@ -840,7 +838,7 @@
       pathId,
       name: path.name,
       closed: !!path.closed,
-      points: path.points.map((p) => p.slice()),
+      points: [...path.points],
       line: new Shape([], { pane: 'pathPane', color: path.color, weight: Math.max(path.weight + 2, 6), fillColor: path.color, fillOpacity: 0.2 })
         .addTo(drawLayer),
       vertices: L.layerGroup().addTo(drawLayer),
@@ -1014,9 +1012,14 @@
     if (e.key === 'Escape') {
       hideContextMenu();
       cancelMode();
-    } else if (typing) {
-      return;
-    } else if (e.key === 'Enter' && state.mode) {
+    } else if (!typing) {
+      shortcut(e);
+    }
+  });
+
+  // Raccourcis hors saisie de texte.
+  function shortcut(e) {
+    if (e.key === 'Enter' && state.mode) {
       e.preventDefault();
       finishMode();
     } else if ((e.key === 'Backspace' || (e.key === 'z' && (e.ctrlKey || e.metaKey))) && state.mode === 'draw') {
@@ -1036,7 +1039,7 @@
         redoChange();
       }
     }
-  });
+  }
 
   // --- URL (#dimension/x/z/zoom) --------------------------------------------------------
 
@@ -1416,12 +1419,12 @@
     $('#redo-btn').disabled = !undo.canRedo;
   }
 
-  // Les états restaurés passent par replaceAll(…, 'history') : ils sont
-  // synchronisés comme une modification locale, sans être réempilés.
+  // Un état restauré par Annuler / Rétablir est déjà l'état courant de la pile
+  // (UndoStack.record l'ignore) ; il est synchronisé comme une modification locale.
   store.onChange((data, source) => {
     const snapshot = JSON.stringify(data);
     if (source === 'remote') undo.reset(snapshot);
-    else if (source !== 'history') undo.record(snapshot);
+    else undo.record(snapshot);
     updateUndoButtons();
   });
 
@@ -1429,7 +1432,7 @@
     if (snapshot === null) return;
     cancelMode();
     map.closePopup();
-    store.replaceAll(JSON.parse(snapshot), 'history');
+    store.replaceAll(JSON.parse(snapshot));
     toast(message);
   }
 

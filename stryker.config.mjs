@@ -9,10 +9,8 @@
 // KoiKiManke). Une commande `vitest run` fixe par mutant donne des résultats
 // justes.
 //
-// app.js (câblage de l'interface : Leaflet, DOM, événements) est couvert à
-// 100 % par tests/app.test.js et par les tests e2e, mais n'est pas muté :
-// sa logique est déportée dans les modules ci-dessous (utils.js notamment),
-// comme la « logique pure » de PlusUn et KoiKiManke.
+// app.js (câblage de l'interface : Leaflet, DOM, événements, ~1500 lignes)
+// est découpé en plages de lignes (`fichier:début-fin`), un job de CI chacune.
 export const targets = {
   'js/utils.js': ['tests/utils.test.js'],
   'js/noise.js': ['tests/noise.test.js'],
@@ -24,6 +22,16 @@ export const targets = {
   'js/undo.js': ['tests/undo.test.js'],
   'js/backups.js': ['tests/backups.test.js'],
   'js/drafts.js': ['tests/drafts.test.js'],
+  'js/app.js:1-150': ['tests/app.test.js'],
+  'js/app.js:151-300': ['tests/app.test.js'],
+  'js/app.js:301-450': ['tests/app.test.js'],
+  'js/app.js:451-600': ['tests/app.test.js'],
+  'js/app.js:601-750': ['tests/app.test.js'],
+  'js/app.js:751-900': ['tests/app.test.js'],
+  'js/app.js:901-1050': ['tests/app.test.js'],
+  'js/app.js:1051-1200': ['tests/app.test.js'],
+  'js/app.js:1201-1350': ['tests/app.test.js'],
+  'js/app.js:1351-1507': ['tests/app.test.js'],
   'worker/src/index.js': ['worker/test/worker.test.js'],
   'worker/src/code.js': ['worker/test/worker.test.js'],
 };

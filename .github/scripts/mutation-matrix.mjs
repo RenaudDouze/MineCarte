@@ -4,14 +4,17 @@
 import { appendFileSync } from 'node:fs';
 import { targets } from '../../stryker.config.mjs';
 
+// Un fichier trop long pour un seul job est découpé en plages de lignes
+// (`js/app.js:1-150`) : chaque plage est un job à part, jamais regroupée avec
+// une autre.
 const groups = new Map();
 for (const [file, tests] of Object.entries(targets)) {
-  const key = tests.join(',');
+  const key = file.includes(':') ? file : tests.join(',');
   groups.set(key, [...(groups.get(key) || []), file]);
 }
 const label = (files) => (files.every((f) => f.startsWith('worker/'))
   ? 'worker'
-  : files.map((f) => f.replace(/^js\//, '').replace(/\.js$/, '')).join('+'));
+  : files.map((f) => f.replace(/^js\//, '').replace(/\.js$/, '').replace(':', '@')).join('+'));
 const include = [...groups.values()].map((files) => ({ name: label(files), mutate: files.join(',') }));
 const matrix = JSON.stringify({ include });
 console.log(matrix);
