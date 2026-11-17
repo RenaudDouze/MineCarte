@@ -561,3 +561,6 @@ body.readonly .edit { display: none !important; }
   .tab { padding: 13px 6px; }
   .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
 }
+
+/* Version du projet (VER-09) : discrète, en bas de la barre latérale. */
+.app-version { margin: 16px 0 8px; text-align: center; font-size: 11px; color: var(--muted); }
