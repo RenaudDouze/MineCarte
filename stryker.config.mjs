@@ -18,6 +18,7 @@ export const targets = {
   'js/store.js': ['tests/store.test.js'],
   'js/icons.js': ['tests/icons.test.js'],
   'js/config.js': ['tests/config.test.js'],
+  'js/version.js': ['tests/version.test.js'],
   'js/sync.js': ['tests/sync.test.js'],
   'js/undo.js': ['tests/undo.test.js'],
   'js/backups.js': ['tests/backups.test.js'],

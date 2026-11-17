@@ -20,6 +20,6 @@ interface Window {
   Drafts: any;
   CloudSync: any;
   DIMENSIONS: string[];
-  MINECARTE_CONFIG: { syncUrl?: string };
+  MINECARTE_CONFIG: { syncUrl?: string; version?: string };
   MineCarte: any;
 }

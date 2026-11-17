@@ -63,6 +63,7 @@ dépôt ; voir `worker/README.md`.
 - `doc/` holds the stable truth for humans and agents: `architecture.md` (script load order), `codage.md` (conventions), `improvement.md` (backlog).
 - Commits follow Conventional Commits (`type(scope): subject`); enable the hook with `git config core.hooksPath .githooks`. The version is derived from the commits by semantic-release (`release.yml`): never edit a version number or a changelog by hand.
 - Audit (CI-13) : le niveau `high` complet passe par `.github/scripts/audit-check.mjs` ; un avis sans correctif se déclare dans `.github/audit-exceptions.json` (raison + expiration, 30 jours au plus), jamais en baissant le seuil.
+- Version affichée (VER-09) : dernier tag `v*`, lu à la construction par `.github/scripts/app-version.mjs` (identique dans tous les dépôts, ne pas le modifier ici) ; `js/version.js` lit `version` dans `js/config.js`, généré par `scripts/build.mjs` ; affichée au bas de la barre latérale. Les workflows de build (`pages.yml`) font un checkout en `fetch-depth: 0`, sans quoi la page affiche `dev`. Les tests figent la valeur : jamais de dépendance aux tags git.
 
 ## Écarts au guide
 
