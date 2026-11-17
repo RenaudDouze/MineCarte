@@ -170,7 +170,7 @@ jobs:
       - name: Audit des dépendances de production
         run: npm audit --omit=dev --audit-level=moderate
       - name: Audit complet (production + développement)
-        run: node .github/scripts/audit-check.mjs --level=high
+        run: node ../.github/scripts/audit-check.mjs --level=high
 
   audit:
     name: Audit des dépendances
