@@ -1625,6 +1625,7 @@ describe('panneau latéral', () => {
     const tabs = $$('.tab');
     tabs[1].click();
     expect(tabs.map((t) => t.classList.contains('active'))).toEqual(tabs.map((t, i) => i === 1));
+    expect(tabs.map((t) => t.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
     const active = $$('.panel').filter((p) => p.classList.contains('active'));
     expect(active.map((p) => p.dataset.panel)).toEqual([tabs[1].dataset.tab]);
   });

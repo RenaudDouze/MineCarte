@@ -37,12 +37,12 @@
   <div class="layout">
     <aside id="sidebar">
       <div class="tabs" role="tablist">
-        <button type="button" class="tab active" data-tab="pois">Lieux</button>
-        <button type="button" class="tab" data-tab="paths">Chemins</button>
-        <button type="button" class="tab" data-tab="zones">Zones</button>
+        <button type="button" class="tab active" data-tab="pois" role="tab" id="tab-pois" aria-controls="panel-pois" aria-selected="true">Lieux</button>
+        <button type="button" class="tab" data-tab="paths" role="tab" id="tab-paths" aria-controls="panel-paths" aria-selected="false">Chemins</button>
+        <button type="button" class="tab" data-tab="zones" role="tab" id="tab-zones" aria-controls="panel-zones" aria-selected="false">Zones</button>
       </div>
 
-      <section class="panel active" data-panel="pois">
+      <section class="panel active" data-panel="pois" role="tabpanel" id="panel-pois" aria-labelledby="tab-pois">
         <div class="row">
           <input id="poi-search" type="search" placeholder="Rechercher…" autocomplete="off" data-form-type="other" data-lpignore="true" data-1p-ignore data-bwignore>
           <button type="button" id="add-poi" class="primary edit">+ Lieu</button>
@@ -52,7 +52,7 @@
         <ul id="poi-list" class="list"></ul>
       </section>
 
-      <section class="panel" data-panel="paths">
+      <section class="panel" data-panel="paths" role="tabpanel" id="panel-paths" aria-labelledby="tab-paths">
         <div class="row edit">
           <button type="button" id="new-path" class="primary grow">+ Tracer un chemin</button>
           <button type="button" id="new-path-coords" title="Créer un chemin en saisissant ses coordonnées">Par coordonnées</button>
@@ -60,7 +60,7 @@
         <ul id="path-list" class="list"></ul>
       </section>
 
-      <section class="panel" data-panel="zones">
+      <section class="panel" data-panel="zones" role="tabpanel" id="panel-zones" aria-labelledby="tab-zones">
         <div class="row edit">
           <button type="button" id="new-zone" class="primary grow">+ Tracer une zone</button>
           <button type="button" id="new-zone-coords" title="Créer une zone en saisissant ses coordonnées">Par coordonnées</button>
