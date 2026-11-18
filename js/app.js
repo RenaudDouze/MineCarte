@@ -1237,7 +1237,10 @@
 
   $$('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
-      $$('.tab').forEach((t) => t.classList.toggle('active', t === tab));
+      $$('.tab').forEach((t) => {
+        t.classList.toggle('active', t === tab);
+        t.setAttribute('aria-selected', String(t === tab));
+      });
       $$('.panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === tab.dataset.tab));
     });
   });
